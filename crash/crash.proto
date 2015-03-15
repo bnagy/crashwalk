@@ -1,0 +1,64 @@
+package crash;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+// these options enable code generation for marshal/unmarshal, which is the
+// big speed benefit of gogo. Note that these are _not_ the unsafe versions.
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.marshaler_all) = true;
+
+// StackEntry represents one stack frame
+message StackEntry {
+  required uint64 address = 1 [(gogoproto.nullable) = false];
+  required string symbol = 2 [(gogoproto.nullable) = false];
+  required string module = 3 [(gogoproto.nullable) = false];
+}
+
+// Instruction is a very simplistic instruction representation. For "real"
+// analysis using Go I'd recommend the capstone disassembly library using the
+// Go bindings at github.com/bnagy/gapstone
+message Instruction {
+  required uint64 address = 1 [(gogoproto.nullable) = false];
+  required string text = 2 [(gogoproto.nullable) = false];
+}
+
+// Register represents one register
+message Register {
+  required string name = 1 [(gogoproto.nullable) = false];
+  required uint64 value = 2 [(gogoproto.nullable) = false];
+}
+
+// Info is just the information that we extract from the debugger. It is
+// wrapped by CrashEntry, and that is wrapped by Crash.
+message Info {
+  repeated StackEntry stack = 1 [(gogoproto.nullable) = false];
+  repeated Register registers = 2 [(gogoproto.nullable) = false];
+  repeated Instruction disassembly = 3 [(gogoproto.nullable) = false];
+  optional Instruction faulting_insn = 4 [(gogoproto.nullable) = false];
+  optional StackEntry faulting_frame = 5 [(gogoproto.nullable) = false];
+  optional string hash = 6 [(gogoproto.nullable) = false];
+  optional string classification = 7 [(gogoproto.nullable) = false];
+  repeated string extra = 8 [(gogoproto.nullable) = false];//
+
+}
+
+// Entry embeds Info and adds some metadata. This is the entry that
+// will be stored in the Bolt database to track crashfiles we have already
+// seen. It does not contain the contents of the crashfile, to save space.
+message Entry {
+  required Info info = 1 [(gogoproto.nullable) = false, (gogoproto.embed) = true];
+  optional int64 timestamp = 2 [(gogoproto.nullable) = false];
+  optional string orig_filename = 3 [(gogoproto.nullable) = false];
+  optional bytes sha1 = 4 [(gogoproto.nullable) = false, (gogoproto.customname) = "SHA1"];
+  repeated string command = 5 [(gogoproto.nullable) = false];
+}
+
+// Crash embeds Entry, so it contains all the information above as well
+// as the full contents of the crashfile. This is suitable for sending on to
+// distributed agents etc for further processing, and will marshal easily to
+// JSON etc.
+message Crash {
+  required Entry entry = 1 [(gogoproto.nullable) = false, (gogoproto.embed) = true];
+  optional bytes data = 2 [(gogoproto.nullable) = false];
+}
