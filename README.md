@@ -42,7 +42,7 @@ install Go, if you haven't already done so.
 
 3. (FOR LINUX ONLY) Make sure you have gdb in your path with `which gdb`
 
-4. (FOR OSX ONLY) I have included a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `afl-triage` binary till pick it up automatically when using `-engine lldb`
+4. (FOR OSX ONLY) I have included a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `afl-triage` binary till pick it up automatically when using `-engine lldb`. You can check the lldb specific code [here](https://github.com/bnagy/lldb)
 
 5. (FOR OSX ONLY) Make sure lldb is installed. You might need to mess about with assorted Xcode hijinks etc.
 
@@ -60,7 +60,7 @@ The binary produced is statically linked (Go just does that), so you can 'deploy
 
 No overarching tests yet, sorry, it's a little fiddly to build a standalone testbed. The gdb / lldb parsers will panic if they get confused and give you the problematic input and a useful stack trace. If the input is not sensitive, use that to open an issue and I'll fix it.
 
-`exploitaben` does have a reasonable set of tests, and you can check out [the results](lldb/exploitaben/test_results/test_output.txt). I suck at python so the diffing is not automatic. I included all of the exploitable project tests as well as all the CrashWrangler tests.
+`exploitaben` does have a reasonable set of tests, and you can check out [the results](https://github.com/bnagy/lldb/exploitaben/test_results/test_output.txt). I suck at python so the diffing is not automatic. I included all of the exploitable project tests as well as all the CrashWrangler tests.
 
 ## Screenshots
 
