@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/bnagy/crashwalk"
 	"github.com/bnagy/crashwalk/gdb"
-	"github.com/bnagy/crashwalk/lldb"
+	"github.com/bnagy/lldb"
 	"log"
 	"os"
 	"path"
