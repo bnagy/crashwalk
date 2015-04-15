@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"github.com/bnagy/crashwalk"
 	"github.com/bnagy/crashwalk/gdb"
-	"github.com/bnagy/lldb"
+	"github.com/bnagy/francis"
 	"log"
 	"os"
 	"path"
 	"regexp"
 	"runtime"
+	"time"
 )
 
 var (
@@ -20,6 +21,7 @@ var (
 	includeSeen  *bool   = flag.Bool("seen", false, "Include seen results from the DB in the output")
 	flagDebugger *string = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
 	flagAuto     *bool   = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
+	flagEvery    *int    = flag.Int("every", -1, "Run every n seconds")
 )
 
 func main() {
@@ -80,7 +82,7 @@ func main() {
 	case "gdb":
 		debugger = &gdb.Engine{}
 	case "lldb":
-		debugger = &lldb.Engine{}
+		debugger = &francis.Engine{}
 	}
 
 	config := crashwalk.CrashwalkConfig{
@@ -99,12 +101,22 @@ func main() {
 		log.Fatalf("Unable to create Crashwalk: %s", err)
 	}
 
-	ch := cw.Run()
-
-	for crash := range ch {
-		fmt.Println(crashwalk.Summarize(crash))
+	var ticker <-chan (time.Time)
+	if *flagEvery > 0 {
+		ticker = time.Tick(time.Duration(*flagEvery) * time.Second)
 	}
 
-	log.Println("All done!")
+	for {
+
+		ch := cw.Run()
+		for crash := range ch {
+			fmt.Println(crashwalk.Summarize(crash))
+		}
+
+		if ticker == nil {
+			break
+		}
+		<-ticker
+	}
 
 }
