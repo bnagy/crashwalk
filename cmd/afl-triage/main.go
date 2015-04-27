@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/bnagy/crashwalk"
@@ -22,6 +23,7 @@ var (
 	flagDebugger *string = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
 	flagAuto     *bool   = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
 	flagEvery    *int    = flag.Int("every", -1, "Run every n seconds")
+	flagOutput   *string = flag.String("output", "text", "Output format to use: [json pb text]")
 )
 
 func main() {
@@ -85,6 +87,16 @@ func main() {
 		debugger = &francis.Engine{}
 	}
 
+	switch *flagOutput {
+	default:
+		fmt.Fprintf(os.Stderr, "  FATAL: Unknown output format %s, only [json pb text]\n", *flagOutput)
+		flag.Usage()
+		os.Exit(1)
+	case "pb":
+	case "json":
+	case "text":
+	}
+
 	config := crashwalk.CrashwalkConfig{
 		Command:     command,
 		Strict:      true,
@@ -110,7 +122,20 @@ func main() {
 
 		ch := cw.Run()
 		for crash := range ch {
-			fmt.Println(crashwalk.Summarize(crash))
+			switch *flagOutput {
+			case "text":
+				fmt.Println(crashwalk.Summarize(crash))
+			case "pb":
+				fmt.Println(crash.String())
+			case "json":
+				j, err := json.Marshal(crash)
+				if err != nil {
+					log.Fatalf("[BUG]: Failed to marshal crash as JSON: %s", err)
+				}
+				fmt.Println(string(j))
+			default:
+				log.Fatalf("[BUG] Unknown output format, how did we pass startup checks?", *flagOutput)
+			}
 		}
 
 		if ticker == nil {

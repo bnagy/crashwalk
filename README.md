@@ -8,13 +8,14 @@ can get godoc at: http://godoc.org/github.com/bnagy/crashwalk
 
 To run the standalone afl-triage tool:
 ```
-$ ./afl-triage -help
-  Usage: afl-triage -root /path/to/afl-dir [-match pattern] [-- /path/to/target -in @@ -out whatever]
+  Usage: afl-triage -root /path/to/afl-dir [-match pattern] -- /path/to/target -in @@ -out whatever
   ( @@ will be substituted for each crashfile )
 
   -auto=false: Prefer the AFL recorded crashing command, if present
   -engine="gdb": Debugging engine to use: [gdb lldb]
+  -every=-1: Run every n seconds
   -match="": Match pattern for files ( go regex syntax )
+  -output="text": Output format to use: [json pb text]
   -root="": Root directory to look for crashes
   -seen=false: Include seen results from the DB in the output
   -workers=1: Number of concurrent workers
@@ -31,7 +32,11 @@ If you're using AFL >= 1.50b then afl automatically records the command that was
 
 If you're triaging from an older version of AFL or you want to run the crashes with a different target command, then `-match crashes.\*id` should match AFL crashes.
 
-The tool creates a BoltDB (in the current directory, by default) that is used to cache crash instrumentation results. This way you can run it multiple times on an active directory and only get the latest crashes, or run it with -seen and get all crashes, but faster. To "reset the cache" just `rm crashwalk.db`.
+The tool creates a BoltDB (in the current directory, by default) that is used to cache crash instrumentation results. This way you can run it multiple times on an active directory and only get the latest crashes, or run it with -seen and get all crashes, but faster. To "reset the cache" just `rm crashwalk.db`. NOTE that the cache DOES NOT contain the actual crashfile, only the metadata, so don't go deleting your crashes or anything.
+
+### Output Formats
+
+Supported output formats are JSON, protocol buffers or the text summary seen in the examples below. JSON and protbuf output is one crash per line, to facilitate piping that output to another process - for example to push each crash to a queue, write them to a database etc.
 
 ## Installation
 
@@ -42,7 +47,7 @@ install Go, if you haven't already done so.
 
 3. (FOR LINUX ONLY) Make sure you have gdb in your path with `which gdb`
 
-4. (FOR OSX ONLY) I have included a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `afl-triage` binary till pick it up automatically when using `-engine lldb`. You can check the lldb specific code [here](https://github.com/bnagy/francis)
+4. (FOR OSX ONLY) I wrote a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `afl-triage` binary will install it as a dependency and use it for `-engine lldb`. You can check the lldb specific code [here](https://github.com/bnagy/francis)
 
 5. (FOR OSX ONLY) Make sure lldb is installed. You might need to mess about with assorted Xcode hijinks etc.
 

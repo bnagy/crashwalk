@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"github.com/bnagy/crashwalk/crash"
 	"github.com/boltdb/bolt"
@@ -314,7 +313,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 				log.Printf("BUG: We raced trying to read a tag? Recovered.")
 				// same checks as above
 				ce := &crash.Entry{}
-				err := json.Unmarshal(cachedBytes, ce)
+				err := proto.Unmarshal(cachedBytes, ce)
 				if err != nil {
 					return fmt.Errorf("Failed to unmarshal CrashEntry: %s", err)
 				}
