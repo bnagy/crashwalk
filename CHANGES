@@ -1,0 +1,5 @@
+Apr 24, 2015:
+
+- Add json and protobuf output options to afl-triage. With the new options,
+  each crash is emitted as a single line, marshalled as either JSON or a
+  protobuf "compact string", suitable for piping to another process.
