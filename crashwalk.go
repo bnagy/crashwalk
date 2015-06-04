@@ -448,7 +448,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 						if !cw.config.Strict {
 							return nil
 						}
-						log.Fatalf("STRICT MODE + AUTO: Unable to find README.txt command and no default given.")
+						log.Fatalf("STRICT MODE + AUTO: Unable to parse README.txt command and no default given.")
 					}
 				}
 
