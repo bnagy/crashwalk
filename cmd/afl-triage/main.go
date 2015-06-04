@@ -22,6 +22,7 @@ var (
 	includeSeen  *bool   = flag.Bool("seen", false, "Include seen results from the DB in the output")
 	flagDebugger *string = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
 	flagAuto     *bool   = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
+	flagStrict   *bool   = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
 	flagEvery    *int    = flag.Int("every", -1, "Run every n seconds")
 	flagOutput   *string = flag.String("output", "text", "Output format to use: [json pb text]")
 )
@@ -99,7 +100,7 @@ func main() {
 
 	config := crashwalk.CrashwalkConfig{
 		Command:     command,
-		Strict:      true,
+		Strict:      *flagStrict,
 		Debugger:    debugger,
 		Root:        *crashRoot,
 		FilterFunc:  filter,
@@ -134,7 +135,7 @@ func main() {
 				}
 				fmt.Println(string(j))
 			default:
-				log.Fatalf("[BUG] Unknown output format, how did we pass startup checks?", *flagOutput)
+				log.Fatalf("[BUG] Unknown output format %q, how did we pass startup checks?", *flagOutput)
 			}
 		}
 
