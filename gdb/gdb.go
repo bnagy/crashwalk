@@ -406,7 +406,6 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	// We don't care about this error because we don't care about GDB's exit
 	// status.
 	out, _ := ioutil.ReadAll(stdout)
-	fmt.Fprintf(os.Stderr, "OUT> %s\n", string(out))
 	cmd.Wait()
 	if t != nil {
 		t.Stop()
