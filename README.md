@@ -15,9 +15,12 @@ To run the standalone afl-triage tool:
   -engine="gdb": Debugging engine to use: [gdb lldb]
   -every=-1: Run every n seconds
   -match="": Match pattern for files ( go regex syntax )
+  -mem=-1: Memory limit for target processes (MB)
   -output="text": Output format to use: [json pb text]
   -root="": Root directory to look for crashes
   -seen=false: Include seen results from the DB in the output
+  -strict=false: Abort the whole run if any crashes fail to repro
+  -t=-1: Timeout for target processes (secs)
   -workers=1: Number of concurrent workers
 ```
 
