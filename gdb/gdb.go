@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/bnagy/crashwalk/crash"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -160,6 +161,15 @@ func mustAddExtra(prefix string, scanner *bufio.Scanner, ci *crash.Info, die fun
 	ci.Extra = append(ci.Extra, scanner.Text())
 }
 
+func mustAdvanceTo(token string, scanner *bufio.Scanner, die func()) {
+	for scanner.Scan() {
+		if scanner.Text() == token {
+			return
+		}
+	}
+	die()
+}
+
 func parseExploitable(raw []byte, ci *crash.Info, die func()) {
 
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
@@ -218,9 +228,7 @@ func parseDisasm(raw []byte, die func()) (crash.Instruction, []crash.Instruction
 	disasm := []crash.Instruction{}
 	fault := crash.Instruction{}
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
-	for scanner.Text() != "Nearby code:" {
-		scanner.Scan()
-	}
+	mustAdvanceTo("Nearby code:", scanner, die)
 
 	for scanner.Scan() {
 
@@ -260,9 +268,7 @@ func parseRegisters(raw []byte, die func()) (registers []crash.Register) {
 
 	registers = make([]crash.Register, 0, 24)
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
-	for scanner.Text() != "<REG>" {
-		scanner.Scan()
-	}
+	mustAdvanceTo("<REG>", scanner, die)
 
 	for scanner.Scan() {
 		if scanner.Text() == "</REG>" {
@@ -375,7 +381,13 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	if err := cmd.Start(); err != nil {
 		return crash.Info{}, fmt.Errorf("Error launching gdb: %s", err)
 	}
-	t := time.AfterFunc(60*time.Second, func() { cmd.Process.Kill() })
+	t := time.AfterFunc(
+		10*time.Second,
+		func() {
+			//cmd.Process.Kill()
+			fmt.Fprintf(os.Stderr, "[DEBUG] killed by timer!")
+		},
+	)
 	// We don't care about this error because we don't care about GDB's exit
 	// status.
 	out, _ := ioutil.ReadAll(stdout)
