@@ -359,6 +359,9 @@ func init() {
 
 func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
 
+	// DEBUG
+	memlimit = 200
+
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 	var cmd *exec.Cmd
 	if memlimit > 0 {
