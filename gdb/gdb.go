@@ -163,7 +163,7 @@ func mustAddExtra(prefix string, scanner *bufio.Scanner, ci *crash.Info, die fun
 
 func mustAdvanceTo(token string, scanner *bufio.Scanner, die func()) {
 	for scanner.Scan() {
-		if scanner.Text() == token {
+		if strings.HasPrefix(scanner.Text(), token) {
 			return
 		}
 	}
@@ -173,37 +173,28 @@ func mustAdvanceTo(token string, scanner *bufio.Scanner, die func()) {
 func parseExploitable(raw []byte, ci *crash.Info, die func()) {
 
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "Faulting frame:") {
-			ff := strings.Fields(scanner.Text())
-			if len(ff) < 9 {
-				die()
-			}
-			// Faulting frame: #  4 None at 0x7ffff6fad93b in /usr/lib/x86_64-linux-gnu/libcairo.so.2.11301.0
-			ci.FaultingFrame = crash.StackEntry{
-				Symbol:  ff[4],
-				Address: mustParseHex(ff[6], die),
-				// don't know if modules can ever contain spaces?
-				Module: strings.Join(ff[8:], " "),
-			}
-			break
-		}
+
+	// Faulting frame: #  4 None at 0x7ffff6fad93b in /usr/lib/x86_64-linux-gnu/libcairo.so.2.11301.0
+	mustAdvanceTo("Faulting frame:", scanner, die)
+	ff := strings.Fields(scanner.Text())
+	if len(ff) < 9 {
+		die()
+	}
+	ci.FaultingFrame = crash.StackEntry{
+		Symbol:  ff[4],
+		Address: mustParseHex(ff[6], die),
+		// don't know if modules can ever contain spaces?
+		Module: strings.Join(ff[8:], " "),
 	}
 	// Description: Abort signal
 	mustAddExtra("Description:", scanner, ci, die)
 	// Short description: AbortSignal (20/22)
 	mustAddExtra("Short description:", scanner, ci, die)
 	// Hash: 71c14ffe39944b60af6fd47d1e505f97.0822ff5e99ce7ad4a1e6e98b273082a7
-	scanner.Scan()
-	if !strings.HasPrefix(scanner.Text(), "Hash:") {
-		die()
-	}
+	mustAdvanceTo("Hash:", scanner, die)
 	ci.Hash = strings.Fields(scanner.Text())[1]
 	// Exploitability Classification: UNKNOWN
-	scanner.Scan()
-	if !strings.HasPrefix(scanner.Text(), "Exploitability") {
-		die()
-	}
+	mustAdvanceTo("Exploitability", scanner, die)
 	ci.Classification = strings.Fields(scanner.Text())[2]
 	// Explanation: The target is stopped on a SIGABRT. [...]
 	mustAddExtra("Explanation:", scanner, ci, die)
@@ -298,11 +289,7 @@ func parseStack(raw []byte, die func()) (stack []crash.StackEntry) {
 	stack = []crash.StackEntry{}
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "Stack trace:") {
-			break
-		}
-	}
+	mustAdvanceTo("Stack trace:", scanner, die)
 
 	for scanner.Scan() {
 		if !strings.HasPrefix(scanner.Text(), "#") {
@@ -382,9 +369,9 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 		return crash.Info{}, fmt.Errorf("Error launching gdb: %s", err)
 	}
 	t := time.AfterFunc(
-		10*time.Second,
+		60*time.Second,
 		func() {
-			//cmd.Process.Kill()
+			cmd.Process.Kill()
 			fmt.Fprintf(os.Stderr, "[DEBUG] killed by timer!")
 		},
 	)
@@ -399,6 +386,9 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
 	}
 
+	// Sometimes the process blats a huge string into gdb, which causes
+	// problems with the 64k limit for token-size in scanner. This seeks ahead
+	// to the start of our canned output to avoid that.
 	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
 	if start < 0 {
 		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
