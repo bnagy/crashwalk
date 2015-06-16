@@ -399,7 +399,12 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
 	}
 
-	ci := parse(out, cmdStr)
+	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
+	if start < 0 {
+		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
+	}
+
+	ci := parse(out[start:], cmdStr)
 	return ci, nil
 
 }
