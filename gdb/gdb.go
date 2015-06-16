@@ -359,17 +359,32 @@ func init() {
 
 func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
 
-	// DEBUG
-	memlimit = 200
-
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 	var cmd *exec.Cmd
+	args := gdbArgs
+
 	if memlimit > 0 {
-		bashcmd := fmt.Sprintf("'ulimit -Sv %d && exec \"$0\" \"$@\"'", memlimit<<20)
-		cmd = exec.Command("bash", "-c", bashcmd, "gdb", cmdStr)
+		// TODO: This works around a Go limitation. There is no clean way to
+		// fork(), setrlimit() and then exec() because forkExec() is combined
+		// into one function in syscall.
+		//
+		// Basically our strategy is to run bash -c "ulimit ... && exec
+		// real_command". After the exec replaces the bash process with the
+		// child, THAT will finally get passed to gdb as an inferior, but it
+		// will have its ulimit set correctly.
+		//
+		// $0 - command following bash -c
+		// $@ - all the args to _that_ command
+		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
+		// final command will be like:
+		// gdb [gdb args] --args [bash -c "ulimit && exec"] [real command here]
+		args = append(args, []string{"bash", "-c", bashmagic}...)
+		args = append(args, command...)
 	} else {
-		cmd = exec.Command("gdb", append(gdbArgs, command...)...)
+		args = append(args, command...)
 	}
+
+	cmd = exec.Command("gdb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("Error creating pipe: %s", err)
@@ -391,22 +406,20 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	// We don't care about this error because we don't care about GDB's exit
 	// status.
 	out, _ := ioutil.ReadAll(stdout)
+	fmt.Fprintf(os.Stderr, "OUT> %s\n", string(out))
 	cmd.Wait()
 	if t != nil {
 		t.Stop()
 	}
 
-	if len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
-		// Inferior probably didn't crash
-		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
-	}
-
-	// Sometimes the process blats a huge string into gdb, which causes
-	// problems with the 64k limit for token-size in scanner. This seeks ahead
-	// to the start of our canned output to avoid that.
+	// Sometimes the inferior blats a huge string into gdb before it either
+	// exits or crashes, which causes problems with the 64k limit for token-
+	// size in scanner. This tries to seek ahead to the start of our canned
+	// output to avoid that.
 	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
-	if start < 0 {
-		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
+
+	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
+		return crash.Info{}, fmt.Errorf("No gdb output for %s", args)
 	}
 
 	ci := parse(out[start:], cmdStr)

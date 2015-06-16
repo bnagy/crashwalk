@@ -23,6 +23,8 @@ var (
 	flagDebugger *string = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
 	flagAuto     *bool   = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
 	flagStrict   *bool   = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
+	flagMem      *int    = flag.Int("mem", -1, "Memory limit for target processes (MB)")
+	flagTimeout  *int    = flag.Int("t", -1, "Timeout for target processes (secs)")
 	flagEvery    *int    = flag.Int("every", -1, "Run every n seconds")
 	flagOutput   *string = flag.String("output", "text", "Output format to use: [json pb text]")
 )
@@ -107,6 +109,8 @@ func main() {
 		Workers:     *flagWorkers,
 		IncludeSeen: *includeSeen,
 		Auto:        *flagAuto,
+		MemoryLimit: *flagMem,
+		Timeout:     *flagTimeout,
 	}
 
 	cw, err := crashwalk.NewCrashwalk(config)

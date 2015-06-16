@@ -90,6 +90,8 @@ type CrashwalkConfig struct {
 	Workers     int                     // number of workers to use
 	IncludeSeen bool                    // include seen crashes from the DB to the output channel
 	Auto        bool                    // Use the command from README.txt in AFL crash dirs
+	MemoryLimit int                     // Memory limit (in MB ) to apply to targets ( via ulimit -v )
+	Timeout     int                     // Timeout (in secs ) to apply to targets
 }
 
 // Crashwalk is used to Run() walk instances, using the supplied config. Walks
@@ -282,7 +284,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		//  - we lost a View() race ( should be impossible in this architecture )
 
 		// run it under the debugger
-		info, err := cw.debugger.Run(thisCmd, -1, -1)
+		info, err := cw.debugger.Run(thisCmd, cw.config.MemoryLimit, cw.config.Timeout)
 		if err != nil {
 			log.Printf("\n---\n")
 			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
