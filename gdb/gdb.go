@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Engine struct{}
@@ -363,7 +364,7 @@ func init() {
 	gdbArgs = append(gdbArgs, gdbPostfix...)
 }
 
-func (e *Engine) Run(command []string) (crash.Info, error) {
+func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
 
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 	cmd := exec.Command("gdb", append(gdbArgs, command...)...)
@@ -374,13 +375,14 @@ func (e *Engine) Run(command []string) (crash.Info, error) {
 	if err := cmd.Start(); err != nil {
 		return crash.Info{}, fmt.Errorf("Error launching gdb: %s", err)
 	}
-
+	t := time.AfterFunc(60*time.Second, func() { cmd.Process.Kill() })
 	// We don't care about this error because we don't care about GDB's exit
 	// status.
 	out, _ := ioutil.ReadAll(stdout)
 	cmd.Wait()
+	t.Stop()
 
-	if bytes.Contains(out, []byte("<REG>\n</REG>")) {
+	if len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
 		// Inferior probably didn't crash
 		return crash.Info{}, fmt.Errorf("No gdb output for %s", cmdStr)
 	}

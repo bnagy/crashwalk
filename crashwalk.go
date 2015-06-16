@@ -75,7 +75,7 @@ func Summarize(c crash.Crash) string {
 // Debugger is a simple interface that allows different debugger backends
 // to be used by this package ( GDB, LLDB etc )
 type Debugger interface {
-	Run(command []string) (crash.Info, error)
+	Run(command []string, memlimit, timeout int) (crash.Info, error)
 }
 
 // CrashwalkConfig is used to set the assorted configuration options for
@@ -282,11 +282,12 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		//  - we lost a View() race ( should be impossible in this architecture )
 
 		// run it under the debugger
-		info, err := cw.debugger.Run(thisCmd)
+		info, err := cw.debugger.Run(thisCmd, -1, -1)
 		if err != nil {
-			log.Printf("\n---\nCommand: %s", strings.Join(thisCmd, " "))
-			log.Printf("File: %s", job.Path)
-			log.Printf("Error: %s\n---\n", err)
+			log.Printf("\n---\n")
+			fmt.Fprintf(os.Stderr, "Command: %s", strings.Join(thisCmd, " "))
+			fmt.Fprintf(os.Stderr, "File: %s", job.Path)
+			fmt.Fprintf(os.Stderr, "Error: %s\n---\n", err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")
 			}
