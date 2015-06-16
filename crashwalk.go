@@ -285,8 +285,8 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		info, err := cw.debugger.Run(thisCmd, -1, -1)
 		if err != nil {
 			log.Printf("\n---\n")
-			fmt.Fprintf(os.Stderr, "Command: %s", strings.Join(thisCmd, " "))
-			fmt.Fprintf(os.Stderr, "File: %s", job.Path)
+			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
+			fmt.Fprintf(os.Stderr, "File: %s\n", job.Path)
 			fmt.Fprintf(os.Stderr, "Error: %s\n---\n", err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")

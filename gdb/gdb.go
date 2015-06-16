@@ -360,7 +360,13 @@ func init() {
 func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
 
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
-	cmd := exec.Command("gdb", append(gdbArgs, command...)...)
+	var cmd *exec.Cmd
+	if memlimit > 0 {
+		bashcmd := fmt.Sprintf("'ulimit -Sv %d && exec \"$0\" \"$@\"'", memlimit<<20)
+		cmd = exec.Command("bash", "-c", bashcmd, "gdb", cmdStr)
+	} else {
+		cmd = exec.Command("gdb", append(gdbArgs, command...)...)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("Error creating pipe: %s", err)
@@ -368,18 +374,24 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	if err := cmd.Start(); err != nil {
 		return crash.Info{}, fmt.Errorf("Error launching gdb: %s", err)
 	}
-	t := time.AfterFunc(
-		60*time.Second,
-		func() {
-			cmd.Process.Kill()
-			fmt.Fprintf(os.Stderr, "[DEBUG] killed by timer!")
-		},
-	)
+
+	var t *time.Timer
+	if timeout > 0 {
+		t = time.AfterFunc(
+			time.Duration(timeout)*time.Second,
+			func() {
+				cmd.Process.Kill()
+				fmt.Fprintf(os.Stderr, "[DEBUG] killed by timer!\n")
+			},
+		)
+	}
 	// We don't care about this error because we don't care about GDB's exit
 	// status.
 	out, _ := ioutil.ReadAll(stdout)
 	cmd.Wait()
-	t.Stop()
+	if t != nil {
+		t.Stop()
+	}
 
 	if len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
 		// Inferior probably didn't crash
