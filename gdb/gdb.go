@@ -20,6 +20,7 @@ import (
 	"time"
 )
 
+// Engine is used to satisy the crashwalk.Debugger interface
 type Engine struct{}
 
 // So classy. :<
@@ -332,7 +333,7 @@ func parseStack(raw []byte, die func()) (stack []crash.StackEntry) {
 
 func parse(raw []byte, cmd string) crash.Info {
 	// This is "inefficient", but I'm going to parse each thing I'm interested
-	// out of the full output instead of doing a single pass.
+	// in out of the full output instead of doing a single pass.
 
 	// this just prettifies the rest of the parsers slightly
 	die := func() {
@@ -357,6 +358,8 @@ func init() {
 	gdbArgs = append(gdbArgs, gdbPostfix...)
 }
 
+// Run satisfies the crashwalk.Debugger interface. It runs a command under the
+// debugger.
 func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
 
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
@@ -370,14 +373,14 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 		//
 		// Basically our strategy is to run bash -c "ulimit ... && exec
 		// real_command". After the exec replaces the bash process with the
-		// child, THAT will finally get passed to gdb as an inferior, but it
+		// child, THAT will finally get run by gdb as an inferior, but it
 		// will have its ulimit set correctly.
 		//
 		// $0 - command following bash -c
 		// $@ - all the args to _that_ command
 		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
 		// final command will be like:
-		// gdb [gdb args] --args [bash -c "ulimit && exec"] [real command here]
+		// gdb [gdb args] --args [bash -c ulimit && exec $0 $@] [real command here]
 		args = append(args, []string{"bash", "-c", bashmagic}...)
 		args = append(args, command...)
 	} else {
@@ -387,10 +390,10 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	cmd = exec.Command("gdb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return crash.Info{}, fmt.Errorf("Error creating pipe: %s", err)
+		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return crash.Info{}, fmt.Errorf("Error launching gdb: %s", err)
+		return crash.Info{}, fmt.Errorf("error launching gdb: %s", err)
 	}
 
 	var t *time.Timer
@@ -418,7 +421,7 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
 
 	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
-		return crash.Info{}, fmt.Errorf("No gdb output for %s", args)
+		return crash.Info{}, fmt.Errorf("no gdb output for %s", args)
 	}
 
 	ci := parse(out[start:], cmdStr)

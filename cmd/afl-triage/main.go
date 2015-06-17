@@ -16,17 +16,17 @@ import (
 )
 
 var (
-	crashRoot    *string = flag.String("root", "", "Root directory to look for crashes")
-	matchPattern *string = flag.String("match", "", "Match pattern for files ( go regex syntax )")
-	flagWorkers  *int    = flag.Int("workers", 1, "Number of concurrent workers")
-	includeSeen  *bool   = flag.Bool("seen", false, "Include seen results from the DB in the output")
-	flagDebugger *string = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
-	flagAuto     *bool   = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
-	flagStrict   *bool   = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
-	flagMem      *int    = flag.Int("mem", -1, "Memory limit for target processes (MB)")
-	flagTimeout  *int    = flag.Int("t", -1, "Timeout for target processes (secs)")
-	flagEvery    *int    = flag.Int("every", -1, "Run every n seconds")
-	flagOutput   *string = flag.String("output", "text", "Output format to use: [json pb text]")
+	crashRoot    = flag.String("root", "", "Root directory to look for crashes")
+	matchPattern = flag.String("match", "", "Match pattern for files ( go regex syntax )")
+	flagWorkers  = flag.Int("workers", 1, "Number of concurrent workers")
+	includeSeen  = flag.Bool("seen", false, "Include seen results from the DB in the output")
+	flagDebugger = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
+	flagAuto     = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
+	flagStrict   = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
+	flagMem      = flag.Int("mem", -1, "Memory limit for target processes (MB)")
+	flagTimeout  = flag.Int("t", -1, "Timeout for target processes (secs)")
+	flagEvery    = flag.Int("every", -1, "Run every n seconds")
+	flagOutput   = flag.String("output", "text", "Output format to use: [json pb text]")
 )
 
 func main() {

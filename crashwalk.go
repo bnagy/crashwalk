@@ -1,7 +1,7 @@
-// crashwalk is a support package for triaging crashfiles on unix systems. It
-// concurrently walks a given root directory and instruments all matching
-// files via an external debugger, passing the results to the caller over a
-// channel.
+// Package crashwalk is a support package for triaging crashfiles on unix
+// systems. It concurrently walks a given root directory and instruments all
+// matching files via an external debugger, passing the results to the caller
+// over a channel.
 package crashwalk
 
 import (
@@ -18,11 +18,17 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	//"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
+
+// Maximum value for the MemoryLimit config option (in MB)
+const MEMORY_LIMIT_MAX = 4096
+
+// Maximum value for the Timeout config option (in secs)
+const TIMEOUT_MAX = 300
 
 // Summarize presents a nicely formatted, human readable summary of the crash.
 // Quite a lot of analysis can be performed by combining this output with
@@ -117,7 +123,7 @@ type Job struct {
 	Command []string
 }
 
-var CRASHBUCKET = []byte("crashes")
+var bucketName = []byte("crashes")
 
 // NewCrashwalk creates a Crashwalk. Consult the information and warnings for
 // that struct.
@@ -129,27 +135,27 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 
 	fd, err := os.Open(config.Root)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't open root %s: %s", config.Root, err)
+		return nil, fmt.Errorf("couldn't open root %s: %s", config.Root, err)
 	}
 	fi, err := fd.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't stat root %s: %s", config.Root, err)
+		return nil, fmt.Errorf("couldn't stat root %s: %s", config.Root, err)
 	}
 	if !fi.Mode().IsDir() {
-		return nil, fmt.Errorf("%s is not a directory.", config.Root)
+		return nil, fmt.Errorf("%s is not a directory", config.Root)
 	}
 	cw.root = config.Root
 
 	if !config.Auto {
 		if len(config.Command) < 2 {
-			return nil, fmt.Errorf(`Minimum command is ["path/to/binary", "@@"]`)
+			return nil, fmt.Errorf(`minimum command is ["path/to/binary", "@@"]`)
 		}
 
 		// smoke test the executable
 		cmd := exec.Command(config.Command[0])
 		err = cmd.Start()
 		if err != nil {
-			return nil, fmt.Errorf("Couldn't exec command '%s': %s", config.Command[0], err)
+			return nil, fmt.Errorf("couldn't exec command '%s': %s", config.Command[0], err)
 		}
 		cmd.Process.Kill()
 
@@ -161,7 +167,7 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 			}
 		}
 		if sub == 0 {
-			return nil, fmt.Errorf("No substitute markers ( @@ ) in supplied command?")
+			return nil, fmt.Errorf("no substitute markers ( @@ ) in supplied command")
 		}
 	}
 
@@ -173,11 +179,27 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 	}
 	db, err := bolt.Open(config.SeenDB, 0600, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open SeenDB (%s): %s", config.SeenDB, err)
+		return nil, fmt.Errorf("failed to open SeenDB (%s): %s", config.SeenDB, err)
 	}
 	err = db.Close()
 	if err != nil {
-		return nil, fmt.Errorf("Error closing SeenDB! %s", err)
+		return nil, fmt.Errorf("error closing SeenDB: %s", err)
+	}
+
+	// Sanity check memlimit / timeout
+	if config.MemoryLimit > MEMORY_LIMIT_MAX {
+		return nil, fmt.Errorf(
+			"proposed memory limit (%d MB) > maximum (%d MB)",
+			config.MemoryLimit,
+			MEMORY_LIMIT_MAX,
+		)
+	}
+	if config.Timeout > TIMEOUT_MAX {
+		return nil, fmt.Errorf(
+			"proposed timeout (%d seconds) > maximum (%d s))",
+			config.Timeout,
+			TIMEOUT_MAX,
+		)
 	}
 
 	// Initialize unset defaults
@@ -213,7 +235,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			copy(thisCmd, cw.config.Command)
 		}
 		if len(thisCmd) < 2 {
-			log.Fatalf("Internal Error: Job command too short: %v\n", job)
+			log.Fatalf("internal error: Job command too short: %v\n", job)
 		}
 
 		for i, s := range thisCmd {
@@ -223,7 +245,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		}
 		f, err := os.Open(job.Path)
 		if err != nil {
-			log.Printf("Couldn't open file %s: %s", job.Path, err)
+			log.Printf("couldn't open file %s: %s", job.Path, err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")
 			}
@@ -236,7 +258,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		crashData, err := ioutil.ReadAll(tr)
 		f.Close()
 		if err != nil {
-			log.Printf("Couldn't read file %s: %s", job.Path, err)
+			log.Printf("couldn't read file %s: %s", job.Path, err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")
 			}
@@ -256,18 +278,18 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		var cachedBytes []byte // marshaled crash.Entry
 		// Optimistic View
 		err = cw.db.View(func(tx *bolt.Tx) error {
-			cachedBytes = tx.Bucket(CRASHBUCKET).Get(tag)
+			cachedBytes = tx.Bucket(bucketName).Get(tag)
 			return nil
 		})
 		if err != nil {
-			log.Fatalf("FATAL: failed to read seenDB: %s", err)
+			log.Fatalf("failed to read seenDB: %s", err)
 		}
 
 		// We found an old entry. Most likely we're about to skip.
 		if cachedBytes != nil {
 			err := proto.Unmarshal(cachedBytes, cachedCE)
 			if err != nil {
-				log.Fatalf("Error unmarshalling stored CrashEntry: %s", err)
+				log.Fatalf("error unmarshalling stored CrashEntry: %s", err)
 			}
 			if bytes.Equal(cachedCE.SHA1, hshCrash) {
 				// Same command, path ( via tag ) and same contents. Seen it.
@@ -286,12 +308,12 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		// run it under the debugger
 		info, err := cw.debugger.Run(thisCmd, cw.config.MemoryLimit, cw.config.Timeout)
 		if err != nil {
-			log.Printf("\n---\n")
+			log.Printf("------\n")
 			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
 			fmt.Fprintf(os.Stderr, "File: %s\n", job.Path)
-			fmt.Fprintf(os.Stderr, "Error: %s\n---\n", err)
+			fmt.Fprintf(os.Stderr, "Error: %s\n---------\n", err)
 			if cw.config.Strict {
-				log.Fatalf("[Instrumentation fault in strict mode]")
+				log.Fatalf("instrumentation fault in strict mode")
 			}
 			continue
 		}
@@ -304,21 +326,21 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		newCE.Command = thisCmd
 		newBytes, err := proto.Marshal(newCE)
 		if err != nil {
-			log.Fatalf("Failed to marshal crash.Entry: %s", err)
+			log.Fatalf("failed to marshal crash.Entry: %s", err)
 		}
 
 		// serialised Update ( threadsafe, but slower )
 		err = cw.db.Update(func(tx *bolt.Tx) error {
 			// check once more in case we're racing and someone else created
 			// it first
-			cachedBytes = tx.Bucket(CRASHBUCKET).Get(tag)
+			cachedBytes = tx.Bucket(bucketName).Get(tag)
 			if cachedBytes != nil {
-				log.Printf("BUG: We raced trying to read a tag? Recovered.")
+				log.Printf("[BUG] We raced trying to read a tag? Recovered.")
 				// same checks as above
 				ce := &crash.Entry{}
 				err := proto.Unmarshal(cachedBytes, ce)
 				if err != nil {
-					return fmt.Errorf("Failed to unmarshal CrashEntry: %s", err)
+					return fmt.Errorf("failed to unmarshal CrashEntry: %s", err)
 				}
 				if bytes.Equal(ce.SHA1, hshCrash) {
 					// Same command, path ( matching tag ) and same contents.
@@ -328,15 +350,15 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 				// Different contents. Cool, we do the update anyway.
 			}
 
-			if err := tx.Bucket(CRASHBUCKET).Put(tag, newBytes); err != nil {
-				return fmt.Errorf("Failed to store token: %s", err)
+			if err := tx.Bucket(bucketName).Put(tag, newBytes); err != nil {
+				return fmt.Errorf("failed to store token: %s", err)
 			}
 
 			return nil
 		})
 
 		if err != nil {
-			log.Fatalf("FATAL: failed to write seenDB: %s", err)
+			log.Fatalf("failed to write seenDB: %s", err)
 		}
 
 		// send it!
@@ -345,7 +367,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 	// All done. wg will be closed by defer.
 }
 
-func parseReadmeCommand(f *os.File) (cmd []string) {
+func parseReadmeCommand(f *os.File) (cmd []string, memlimit int) {
 	// Command line used to find this crash:
 	//
 	// ./afl-fuzz -i /Users/ben/src/afl-1.36b/testcases/others/pdf/ -o /Volumes/ramdisk/popplFIXED -d -x /Users/ben/scratch/pdfextras -T pdftoppm FIXED -- /Users/ben/src/poppler-0.31.0/utils/pdftoppm -aa no -r 36 -png @@
@@ -368,6 +390,16 @@ func parseReadmeCommand(f *os.File) (cmd []string) {
 		return
 	}
 	cmd = strings.Split(subst[1], " ")
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "The limit used for this fuzzing session") {
+			ff := strings.Fields(scanner.Text())
+			if len(ff) > 9 && ff[len(ff)-1] == "MB." {
+				if flt, err := strconv.ParseFloat(ff[len(ff)-2], 64); err == nil {
+					memlimit = int(flt)
+				}
+			}
+		}
+	}
 	return
 }
 
@@ -386,14 +418,14 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 
 	db, err := bolt.Open(cw.config.SeenDB, 0600, nil)
 	if err != nil {
-		log.Fatalf("Failed to open SeenDB (%s): %s", cw.config.SeenDB, err)
+		log.Fatalf("failed to open SeenDB (%s): %s", cw.config.SeenDB, err)
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(CRASHBUCKET)
+		tx.CreateBucketIfNotExists(bucketName)
 		return nil
 	})
 	if err != nil {
-		log.Fatalf("Error creating bucket! %s", err)
+		log.Fatalf("error creating bucket: %s", err)
 	}
 	cw.db = db
 
@@ -427,6 +459,10 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 				}
 
 				if cw.config.Auto {
+					// -auto options take precedence over options given on the
+					// command line. This lets you specify "defaults" for
+					// -auto when README.txt files aren't found or can't be
+					// parsed.
 					dn, _ := filepath.Split(path)
 
 					if cached := cw.commandCache[dn]; cached == nil {
@@ -436,8 +472,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 							// persistent "don't bother"
 							cw.commandCache[dn] = []string{}
 						} else {
-							// try to get command
-							cw.commandCache[dn] = parseReadmeCommand(readme)
+							cw.commandCache[dn], cw.config.MemoryLimit = parseReadmeCommand(readme)
 						}
 					}
 
@@ -451,7 +486,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 						if !cw.config.Strict {
 							return nil
 						}
-						log.Fatalf("STRICT MODE + AUTO: Unable to parse README.txt command and no default given.")
+						log.Fatalf("[STRICT MODE] unable to parse README.txt for -auto and no defaults given.")
 					}
 				}
 

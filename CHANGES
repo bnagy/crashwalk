@@ -3,3 +3,11 @@ Apr 24, 2015:
 - Add json and protobuf output options to afl-triage. With the new options,
   each crash is emitted as a single line, marshalled as either JSON or a
   protobuf "compact string", suitable for piping to another process.
+
+Jun 17, 2015:
+
+- Add MemoryLimit and Timeout options to CrashwalkConfig struct
+- Add corresponding -t and -mem options to afl-triage
+- Change signature of Debugger interface ( internal / API change)
+- -auto flag now automatically sets memory limit from afl's README.txt
+- Fix some stupid hang bugs in the gdb engine
