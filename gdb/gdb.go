@@ -176,16 +176,30 @@ func parseExploitable(raw []byte, ci *crash.Info, die func()) {
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 
 	// Faulting frame: #  4 None at 0x7ffff6fad93b in /usr/lib/x86_64-linux-gnu/libcairo.so.2.11301.0
+	// Faulting frame: #  6 operator new(unsigned long) at 0x7ffff6d87698 in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
+	// [  <---ignore--->  ] [  symbol text until "at"  ]     [address]      [ <-- module from here--> ]
 	mustAdvanceTo("Faulting frame:", scanner, die)
 	ff := strings.Fields(scanner.Text())
 	if len(ff) < 9 {
 		die()
 	}
+
+	atIdx := 0
+	for i := 0; i < len(ff); i++ {
+		if ff[i] == "at" {
+			atIdx = i
+			break
+		}
+	}
+	if atIdx == 0 {
+		die()
+	}
+
 	ci.FaultingFrame = crash.StackEntry{
-		Symbol:  ff[4],
-		Address: mustParseHex(ff[6], die),
+		Symbol:  strings.Join(ff[4:atIdx], " "),
+		Address: mustParseHex(ff[atIdx+1], die),
 		// don't know if modules can ever contain spaces?
-		Module: strings.Join(ff[8:], " "),
+		Module: strings.Join(ff[atIdx+3:], " "),
 	}
 	// Description: Abort signal
 	mustAddExtra("Description:", scanner, ci, die)
