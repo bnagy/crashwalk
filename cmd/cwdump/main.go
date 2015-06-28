@@ -62,7 +62,7 @@ func main() {
 				})
 
 				for k, v := range summaries {
-					fmt.Printf("(1 of %v) - Hash: %v", v.count, k)
+					fmt.Printf("(1 of %v) - Hash: %v\n", v.count, k)
 					fmt.Println(v.detail)
 				}
 				return nil
