@@ -11,3 +11,12 @@ Jun 17, 2015:
 - Change signature of Debugger interface ( internal / API change)
 - -auto flag now automatically sets memory limit from afl's README.txt
 - Fix some stupid hang bugs in the gdb engine
+
+Jun 26, 2015:
+
+- Fix a parsing bug in the gdb engine for the "faulting frame" struct
+
+Jun 28, 2015:
+
+- Add cwfind and cwdump commands
+- Rename afl-triage to cwtriage

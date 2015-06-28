@@ -6,9 +6,10 @@ Crashwalk
 If you want to use `import "github.com/bnagy/crashwalk"` in your own Go code, you
 can get godoc at: http://godoc.org/github.com/bnagy/crashwalk
 
-To run the standalone afl-triage tool:
+To run the standalone cwtriage tool:
 ```
-  Usage: afl-triage -root /path/to/afl-dir [-match pattern] -- /path/to/target -in @@ -out whatever
+  cwtriage runs crashfiles with instrumentation and outputs results in various formats
+  Usage: cwtriage -root /path/to/afl-dir [-match pattern] -- /path/to/target -in @@ -out whatever
   ( @@ will be substituted for each crashfile )
 
   -auto=false: Prefer the AFL recorded crashing command, if present
@@ -50,7 +51,7 @@ install Go, if you haven't already done so.
 
 3. (FOR LINUX ONLY) Make sure you have gdb in your path with `which gdb`
 
-4. (FOR OSX ONLY) I wrote a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `afl-triage` binary will install it as a dependency and use it for `-engine lldb`. You can check the lldb specific code [here](https://github.com/bnagy/francis)
+4. (FOR OSX ONLY) I wrote a very heavily modified mutant offspring of exploitable and one of the lldb sample tools, called `exploitaben.py`. Unless you do something unusual the `cwtriage` binary will install it as a dependency and use it for `-engine lldb`. You can check the lldb specific code [here](https://github.com/bnagy/francis)
 
 5. (FOR OSX ONLY) Make sure lldb is installed. You might need to mess about with assorted Xcode hijinks etc.
 
@@ -64,7 +65,7 @@ And build. This includes running make in the crash directory to run the gogoprot
 $ cd $GOPATH/src/github.com/bnagy/crashwalk/crash && make && cd ..  && go build ./cmd/... 
 $ go install ./cmd/... # optionally install binaries to $GOPATH/bin
 ```
-The binary produced is statically linked (Go just does that), so you can 'deploy' to other systems, docker containers etc by just copying it.
+The binaries produced are statically linked (Go just does that), so you can 'deploy' to other systems, docker containers etc by just copying them.
 
 No overarching tests yet, sorry, it's a little fiddly to build a standalone testbed. The gdb / lldb parsers will panic if they get confused and give you the problematic input and a useful stack trace. If the input is not sensitive, use that to open an issue and I'll fix it.
 
@@ -74,7 +75,7 @@ No overarching tests yet, sorry, it's a little fiddly to build a standalone test
 
 #### GDB Example - unique faulting EIPs
 ```
-./afl-triage -seen -match crashes.\*id -root /dev/shm/crashexplore/ -- /home/ben/src/poppler-0.26.5/utils/pdftocairo -jpeg @@ | grep =\> | sort | uniq -c
+./cwtriage -seen -match crashes.\*id -root /dev/shm/crashexplore/ -- /home/ben/src/poppler-0.26.5/utils/pdftocairo -jpeg @@ | grep =\> | sort | uniq -c
 2015/02/19 00:58:20 Worker started
 2015/02/19 01:06:51 All done!
       1 => 0x00007ffff6184dfe: push r13
