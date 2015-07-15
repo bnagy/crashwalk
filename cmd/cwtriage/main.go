@@ -10,23 +10,25 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"time"
 )
 
 var (
-	crashRoot    = flag.String("root", "", "Root directory to look for crashes")
-	matchPattern = flag.String("match", "", "Match pattern for files ( go regex syntax )")
-	flagWorkers  = flag.Int("workers", 1, "Number of concurrent workers")
-	includeSeen  = flag.Bool("seen", false, "Include seen results from the DB in the output")
-	flagDebugger = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
-	flagAuto     = flag.Bool("auto", false, "Prefer the AFL recorded crashing command, if present")
-	flagStrict   = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
-	flagMem      = flag.Int("mem", -1, "Memory limit for target processes (MB)")
-	flagTimeout  = flag.Int("t", -1, "Timeout for target processes (secs)")
-	flagEvery    = flag.Int("every", -1, "Run every n seconds")
-	flagOutput   = flag.String("output", "text", "Output format to use: [json pb text]")
+	crashRoot     = flag.String("root", "", "Root directory to look for crashes")
+	matchPattern  = flag.String("match", "", "Match pattern for files ( go regex syntax )")
+	ignorePattern = flag.String("ignore", "", "Directory skip pattern ( go regex syntax )")
+	flagWorkers   = flag.Int("workers", 1, "Number of concurrent workers")
+	includeSeen   = flag.Bool("seen", false, "Include seen results from the DB in the output")
+	flagDebugger  = flag.String("engine", "gdb", "Debugging engine to use: [gdb lldb]")
+	flagAfl       = flag.Bool("afl", false, "Prefer the AFL recorded crashing command, if present")
+	flagStrict    = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
+	flagMem       = flag.Int("mem", -1, "Memory limit for target processes (MB)")
+	flagTimeout   = flag.Int("t", -1, "Timeout for target processes (secs)")
+	flagEvery     = flag.Int("every", -1, "Run every n seconds")
+	flagOutput    = flag.String("output", "text", "Output format to use: [json pb text]")
 )
 
 func main() {
@@ -56,7 +58,7 @@ func main() {
 	}
 
 	if *matchPattern == "" {
-		if *flagAuto {
+		if *flagAfl {
 			*matchPattern = "crashes.*id"
 		} else {
 			*matchPattern = ".*"
@@ -69,7 +71,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	var skipRegex *regexp.Regexp
+	if *ignorePattern != "" {
+		skipRegex, err = regexp.Compile(fmt.Sprintf("%s", *ignorePattern))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  FATAL: %s\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
+	}
+
 	filter := func(path string) error {
+		if skipRegex != nil {
+			if skipRegex.MatchString(path) {
+				// Whole directory will not be entered
+				return filepath.SkipDir
+			}
+		}
 		if crashRegex.MatchString(path) {
 			return nil
 		}
@@ -77,7 +95,7 @@ func main() {
 	}
 
 	command := flag.Args()
-	if len(command) < 2 && !*flagAuto {
+	if len(command) < 2 && !*flagAfl {
 		fmt.Fprintf(os.Stderr, "  FATAL: Minimum target command is: /path/to/target @@\n")
 		flag.Usage()
 		os.Exit(1)
@@ -115,7 +133,7 @@ func main() {
 		FilterFunc:  filter,
 		Workers:     *flagWorkers,
 		IncludeSeen: *includeSeen,
-		Auto:        *flagAuto,
+		Auto:        *flagAfl,
 		MemoryLimit: *flagMem,
 		Timeout:     *flagTimeout,
 	}
