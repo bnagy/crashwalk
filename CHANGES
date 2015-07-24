@@ -20,3 +20,8 @@ Jun 28, 2015:
 
 - Add cwfind and cwdump commands
 - Rename afl-triage to cwtriage
+
+Jul 15, 2015:
+
+- Rename -auto option to -afl
+- Add -ignore option to cwtriage to skip whole dirs
