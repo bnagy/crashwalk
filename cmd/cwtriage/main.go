@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/bnagy/crashwalk"
@@ -80,18 +81,27 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// If the user hasn't supplied a skip regex AND they want AFL auto mode,
+	// we supply a useful one.
+	if skipRegex == nil && *flagAfl {
+		// I, personally, name sync dirs from other fuzzers something.sync
+		// This skips those, which might trip you up, although it seems
+		// unlikely. The other directories it skips are the queue and hang
+		// dirs, which means the walker doesn't need to visit each file in
+		// those directories (quite a big speedup)
+		skipRegex = regexp.MustCompile(".sync/|queue/|hang/")
+	}
 
+	skipErr := errors.New("no match")
 	filter := func(path string) error {
-		if skipRegex != nil {
-			if skipRegex.MatchString(path) {
-				// Whole directory will not be entered
-				return filepath.SkipDir
-			}
+		if skipRegex != nil && skipRegex.MatchString(path) {
+			// Whole directory will not be entered
+			return filepath.SkipDir
 		}
 		if crashRegex.MatchString(path) {
 			return nil
 		}
-		return fmt.Errorf("no match")
+		return skipErr
 	}
 
 	command := flag.Args()
