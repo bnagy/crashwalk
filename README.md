@@ -6,15 +6,18 @@ Crashwalk
 If you want to use `import "github.com/bnagy/crashwalk"` in your own Go code, you
 can get godoc at: http://godoc.org/github.com/bnagy/crashwalk
 
+## cwtriage
+
 To run the standalone cwtriage tool:
 ```
   cwtriage runs crashfiles with instrumentation and outputs results in various formats
   Usage: cwtriage -root /path/to/afl-dir [-match pattern] -- /path/to/target -in @@ -out whatever
   ( @@ will be substituted for each crashfile )
 
-  -auto=false: Prefer the AFL recorded crashing command, if present
+  -afl=false: Prefer the AFL recorded crashing command, if present
   -engine="gdb": Debugging engine to use: [gdb lldb]
   -every=-1: Run every n seconds
+  -ignore="": Directory skip pattern ( go regex syntax )
   -match="": Match pattern for files ( go regex syntax )
   -mem=-1: Memory limit for target processes (MB)
   -output="text": Output format to use: [json pb text]
@@ -25,12 +28,19 @@ To run the standalone cwtriage tool:
   -workers=1: Number of concurrent workers
 ```
 
-### Auto Mode
+### AFL Mode
 
 If you're using AFL >= 1.50b then afl automatically records the command that was used in each crash dir ( in the README.txt file ). For most people, that means you can use the -auto switch to:
 - Automatically set the -match pattern to match AFL crashfiles
 - Automatically use the stored command from the README.txt in each crash directory
+- Automatically set the same memory limit
+- Automatically ignore queue/ and hang/ directories
 - Use the supplied command (if any) as a default
+
+If you are in the directory that contains your individual fuzz workers, then the minimal command would be something like
+```
+cwtriage -root . -afl
+```
 
 ### Manual Mode
 
@@ -42,6 +52,26 @@ The tool creates a BoltDB (in the current directory, by default) that is used to
 
 Supported output formats are JSON, protocol buffers or the text summary seen in the examples below. JSON and protbuf output is one crash per line, to facilitate piping that output to another process - for example to push each crash to a queue, write them to a database etc.
 
+## cwdump
+
+`cwdump` summarizes crashes in a crashwalk database by major / minor stack hash. Although AFL (for example) already de-dups crashes, bucketing summarizes those crashes by an order of magnitude or more. Crashes that bucket the same have _exactly_ the same stack contents, so they're likely (not guaranteed) to be the same bug.
+
+Run `cwtriage` as above and then do something like
+```
+cwdump ./crashwalk.db > triage.txt
+```
+
+## cwfind
+
+`cwfind` is a simple utility to output the filenames of all crashes matching a given hash. I use it in combination with `xargs` to bulk delete / move crashfiles.
+
+```
+$ cwfind a9060880abffbe2dcd5c9b4bb39c9233.0e358881a2545b216eee9aabe3723302
+pdf-S3/crashes/id:000821,sig:08,src:019017+009441,op:splice,rep:16
+pdf-S25/crashes/id:000823,sig:08,src:019101+013412,op:splice,rep:64
+pdf-S17/crashes/id:000870,sig:08,src:025983+017873,op:splice,rep:8
+pdf-S3/crashes/id:000822,sig:08,src:019017+009441,op:splice,rep:4
+```
 ## Installation
 
 1. You should follow the [instructions](https://golang.org/doc/install) to
@@ -57,14 +87,9 @@ install Go, if you haven't already done so.
 
 Now, install crashwalk:
 ```bash
-$ go get -u github.com/bnagy/crashwalk/...
+$ go get -u github.com/bnagy/crashwalk/cmd/...
 ```
 
-And build. This includes running make in the crash directory to run the gogoprotobuf code generation for the .proto files, but you could probably skip that if you liked. 
-```bash
-$ cd $GOPATH/src/github.com/bnagy/crashwalk/crash && make && cd ..  && go build ./cmd/... 
-$ go install ./cmd/... # optionally install binaries to $GOPATH/bin
-```
 The binaries produced are statically linked (Go just does that), so you can 'deploy' to other systems, docker containers etc by just copying them.
 
 No overarching tests yet, sorry, it's a little fiddly to build a standalone testbed. The gdb / lldb parsers will panic if they get confused and give you the problematic input and a useful stack trace. If the input is not sensitive, use that to open an issue and I'll fix it.
@@ -75,8 +100,8 @@ No overarching tests yet, sorry, it's a little fiddly to build a standalone test
 
 #### GDB Example - unique faulting EIPs
 ```
-./cwtriage -seen -match crashes.\*id -root /dev/shm/crashexplore/ -- /home/ben/src/poppler-0.26.5/utils/pdftocairo -jpeg @@ | grep =\> | sort | uniq -c
-2015/02/19 00:58:20 Worker started
+./cwtriage -afl -root . -workers 16 | grep =\> | sort | uniq -c
+2015/02/19 00:58:20 Workers started
 2015/02/19 01:06:51 All done!
       1 => 0x00007ffff6184dfe: push r13
     140 => 0x00007ffff6184e17: mov DWORD PTR [rbp-0x4e0],eax
