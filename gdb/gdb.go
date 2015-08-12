@@ -24,7 +24,7 @@ import (
 type Engine struct{}
 
 // So classy. :<
-var gdbBatch = []string{
+var gdbFileBatch = []string{
 	"run",
 	"source ~/src/exploitable/exploitable/exploitable.py", // TODO get from env? hardwire?
 	"echo <EXPLOITABLE>\n",
@@ -35,9 +35,10 @@ var gdbBatch = []string{
 	"echo </REG>\n",
 	"quit",
 }
+var gdbStdinBatch = gdbFileBatch[1:] // will add `run < FILENAME` at runtime
 var gdbPrefix = []string{"-q", "--batch"}
 var gdbPostfix = []string{"--args"}
-var gdbArgs = gdbPrefix
+var gdbFileArgs = gdbPrefix
 
 // Example output
 /*
@@ -366,19 +367,50 @@ func parse(raw []byte, cmd string) crash.Info {
 
 func init() {
 	// build the commandline from the components
-	for _, s := range gdbBatch {
-		gdbArgs = append(gdbArgs, []string{"--ex", s}...)
+	for _, s := range gdbFileBatch {
+		gdbFileArgs = append(gdbFileArgs, []string{"--ex", s}...)
 	}
-	gdbArgs = append(gdbArgs, gdbPostfix...)
+	gdbFileArgs = append(gdbFileArgs, gdbPostfix...)
+}
+
+func buildStdinArgs(filename string) []string {
+	// build the commandline from the components
+	gdbPreArgs := []string{}
+	gdbPreArgs = append(gdbPreArgs, gdbPrefix...)
+	gdbPreArgs = append(gdbPreArgs, []string{"--ex", fmt.Sprintf("run < %s", filename)}...)
+	for _, s := range gdbStdinBatch {
+		gdbPreArgs = append(gdbPreArgs, []string{"--ex", s}...)
+	}
+	gdbPreArgs = append(gdbPreArgs, gdbPostfix...)
 }
 
 // Run satisfies the crashwalk.Debugger interface. It runs a command under the
 // debugger.
-func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
+func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (crash.Info, error) {
 
-	cmdStr := strings.Join(append(gdbArgs, command...), " ")
-	var cmd *exec.Cmd
-	args := gdbArgs
+	// Sub the filename into the target command
+	subs := 0
+	for i, s := range command {
+		if s == "@@" {
+			command[i] = filename
+			subs++
+		}
+	}
+
+	// TODO if filename is "" but there are subs set, should we error?
+
+	gdbArgs := []string{}
+
+	if len(subs) == 0 {
+		// command wants stdin. We will build gdb args at runtime, using the
+		// gdb command `run < filename` to pipe the file to the inferior as
+		// stdin
+		gdbArgs = buildStdinArgs(filename)
+	} else {
+		// command wants a filename. This is subbed into the command above in
+		// place of the @@ marker and we just use the gdb `run` command
+		gdbArgs = gdbFileArgs
+	}
 
 	if memlimit > 0 {
 		// TODO: This works around a Go limitation. There is no clean way to
@@ -394,14 +426,14 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 		// $@ - all the args to _that_ command
 		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
 		// final command will be like:
-		// gdb [gdb args] --args [bash -c ulimit && exec $0 $@] [real command here]
-		args = append(args, []string{"bash", "-c", bashmagic}...)
-		args = append(args, command...)
+		// gdb [pre args] --args [bash -c ulimit && exec $0 $@] [real command here]
+		gdbArgs = append(gdbArgs, []string{"bash", "-c", bashmagic}...)
+		gdbArgs = append(gdbArgs, command...)
 	} else {
-		args = append(args, command...)
+		gdbArgs = append(gdbArgs, command...)
 	}
 
-	cmd = exec.Command("gdb", args...)
+	cmd := exec.Command("gdb", gdbArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)

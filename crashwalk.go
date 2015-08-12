@@ -81,7 +81,7 @@ func Summarize(c crash.Crash) string {
 // Debugger is a simple interface that allows different debugger backends
 // to be used by this package ( GDB, LLDB etc )
 type Debugger interface {
-	Run(command []string, memlimit, timeout int) (crash.Info, error)
+	Run(command []string, filename string, memlimit, timeout int) (crash.Info, error)
 }
 
 // CrashwalkConfig is used to set the assorted configuration options for
@@ -147,10 +147,9 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 	cw.root = config.Root
 
 	if !config.Auto {
-		if len(config.Command) < 2 {
-			return nil, fmt.Errorf(`minimum command is ["path/to/binary", "@@"]`)
+		if len(config.Command) == 0 {
+			return nil, fmt.Errorf(`minimum command is ["path/to/binary"]`)
 		}
-
 		// smoke test the executable
 		cmd := exec.Command(config.Command[0])
 		err = cmd.Start()
@@ -158,17 +157,6 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 			return nil, fmt.Errorf("couldn't exec command '%s': %s", config.Command[0], err)
 		}
 		cmd.Process.Kill()
-
-		// make sure there's at least one substitute marker
-		sub := 0
-		for _, elem := range config.Command {
-			if elem == "@@" {
-				sub++
-			}
-		}
-		if sub == 0 {
-			return nil, fmt.Errorf("no substitute markers ( @@ ) in supplied command")
-		}
 	}
 
 	// Smoke test the SeenDB. Run() will open and close this each time so that
@@ -234,15 +222,10 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			thisCmd = make([]string, len(cw.config.Command))
 			copy(thisCmd, cw.config.Command)
 		}
-		if len(thisCmd) < 2 {
+		if len(thisCmd) == 0 {
 			log.Fatalf("internal error: Job command too short: %v\n", job)
 		}
 
-		for i, s := range thisCmd {
-			if s == "@@" {
-				thisCmd[i] = job.Path
-			}
-		}
 		f, err := os.Open(job.Path)
 		if err != nil {
 			log.Printf("couldn't open file %s: %s", job.Path, err)
@@ -306,7 +289,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		//  - we lost a View() race ( should be impossible in this architecture )
 
 		// run it under the debugger
-		info, err := cw.debugger.Run(thisCmd, cw.config.MemoryLimit, cw.config.Timeout)
+		info, err := cw.debugger.Run(thisCmd, job.Path, cw.config.MemoryLimit, cw.config.Timeout)
 		if err != nil {
 			log.Printf("------\n")
 			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
@@ -482,7 +465,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 						return nil
 					}
 
-					if cw.config.Command == nil || len(cw.config.Command) < 2 {
+					if cw.config.Command == nil || len(cw.config.Command) == 0 {
 						if !cw.config.Strict {
 							return nil
 						}
