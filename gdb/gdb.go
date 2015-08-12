@@ -413,10 +413,26 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		gdbArgs = gdbFileArgs
 	}
 
+	gdbArgs = append(gdbArgs, command...)
+
 	cmd := exec.Command("gdb", gdbArgs...)
+
+	// XXX THIS IS AWFUL. The only way I can figure out to set ulimits on
+	// the children is to set it on the child process. The approach I was
+	// using before when I used `bash -c "ulimit xxxx && exec $0 $@ real
+	// command here` doesn't work with gdb run and redirection. This means
+	// that if the memory limit for the repro command is below what
+	// cwtriage needs itself it's going to crash. IRL that _shouldn't_ be
+	// an issue unless the memory limits are set to be unrealistically low,
+	// but it's bound to bite someone, on day. :< 
+	//
+	// PS: it might be more efficient to set it higher, but this is
+	// guaranteed to work when triaging multiple crash dirs which all have
+	// different memory limits.
 	if memlimit > 0 {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("RLIMIT_DATA=%d", memlimit*1024))
+		exec.Command("ulimit", "-Sv", fmt.Sprintf("%d", memlimit * 1024)).Run()
 	}
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)
