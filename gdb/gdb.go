@@ -413,28 +413,24 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		gdbArgs = gdbFileArgs
 	}
 
+	bashCmd := ""
 	if memlimit > 0 {
 		// TODO: This works around a Go limitation. There is no clean way to
 		// fork(), setrlimit() and then exec() because forkExec() is combined
 		// into one function in syscall.
-		//
-		// Basically our strategy is to run bash -c "ulimit ... && exec
-		// real_command". After the exec replaces the bash process with the
-		// child, THAT will finally get run by gdb as an inferior, but it
-		// will have its ulimit set correctly.
-		//
-		// $0 - command following bash -c
-		// $@ - all the args to _that_ command
-		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
+		bashCmd := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ";"
 		// final command will be like:
-		// gdb [pre args] --args [bash -c ulimit && exec $0 $@] [real command here]
-		gdbArgs = append(gdbArgs, []string{"bash", "-c", bashmagic}...)
-		gdbArgs = append(gdbArgs, command...)
+		// bash -c ulimit -Sv XXXXX; gdb [pre args] --args [real command here]
+		bashCmd += "gdb " + strings.Join(gdbArgs, " ")
+		bashCmd += " " + strings.Join(command, " ")
 	} else {
-		gdbArgs = append(gdbArgs, command...)
+		// final command will be like:
+		// bash -c gdb [pre args] --args [real command here]
+		bashCmd += "gdb " + strings.Join(gdbArgs, " ")
+		bashCmd += " " + strings.Join(command, " ")
 	}
 
-	cmd := exec.Command("gdb", gdbArgs...)
+	cmd := exec.Command("bash", "-c", bashCmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)
