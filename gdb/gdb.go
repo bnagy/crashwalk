@@ -449,10 +449,10 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 	// output to avoid that.
 	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
 
-	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
-		return crash.Info{}, fmt.Errorf("no gdb output")
-	}
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
+	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
+		return crash.Info{}, fmt.Errorf("no gdb output:\n%s\n", cmdStr)
+	}
 
 	ci := parse(out[start:], cmdStr)
 	return ci, nil
