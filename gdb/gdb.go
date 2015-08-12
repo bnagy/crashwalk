@@ -382,6 +382,7 @@ func buildStdinArgs(filename string) []string {
 		gdbPreArgs = append(gdbPreArgs, []string{"--ex", s}...)
 	}
 	gdbPreArgs = append(gdbPreArgs, gdbPostfix...)
+	return gdbPreArgs
 }
 
 // Run satisfies the crashwalk.Debugger interface. It runs a command under the
@@ -401,7 +402,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 
 	gdbArgs := []string{}
 
-	if len(subs) == 0 {
+	if subs == 0 {
 		// command wants stdin. We will build gdb args at runtime, using the
 		// gdb command `run < filename` to pipe the file to the inferior as
 		// stdin
@@ -469,6 +470,8 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
 		return crash.Info{}, fmt.Errorf("no gdb output")
 	}
+
+	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 
 	ci := parse(out[start:], cmdStr)
 	return ci, nil
