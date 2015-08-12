@@ -425,11 +425,10 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		//
 		// $0 - command following bash -c
 		// $@ - all the args to _that_ command
-		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
+		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d && exec %s", memlimit*1024, strings.Join(command, " "))
 		// final command will be like:
-		// gdb [pre args] --args [bash -c ulimit && exec $0 $@] [real command here]
+		// gdb [pre args] --args [bash -c ulimit && exec real command here
 		gdbArgs = append(gdbArgs, []string{"bash", "-c", bashmagic}...)
-		gdbArgs = append(gdbArgs, command...)
 	} else {
 		gdbArgs = append(gdbArgs, command...)
 	}
@@ -471,7 +470,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		return crash.Info{}, fmt.Errorf("no gdb output")
 	}
 
-	cmdStr := strings.Join(append(gdbArgs, command...), " ")
+	cmdStr := strings.Join(gdbArgs, " ")
 
 	ci := parse(out[start:], cmdStr)
 	return ci, nil
