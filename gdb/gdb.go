@@ -413,24 +413,10 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		gdbArgs = gdbFileArgs
 	}
 
-	bashCmd := ""
+	cmd := exec.Command("gdb", gdbArgs...)
 	if memlimit > 0 {
-		// TODO: This works around a Go limitation. There is no clean way to
-		// fork(), setrlimit() and then exec() because forkExec() is combined
-		// into one function in syscall.
-		bashCmd := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ";"
-		// final command will be like:
-		// bash -c ulimit -Sv XXXXX; gdb [pre args] --args [real command here]
-		bashCmd += "gdb " + strings.Join(gdbArgs, " ")
-		bashCmd += " " + strings.Join(command, " ")
-	} else {
-		// final command will be like:
-		// bash -c gdb [pre args] --args [real command here]
-		bashCmd += "gdb " + strings.Join(gdbArgs, " ")
-		bashCmd += " " + strings.Join(command, " ")
+		cmd.Env = append(cmd.Env, fmt.Sprintf("RLIMIT_DATA=%d", memlimit*1024))
 	}
-
-	cmd := exec.Command("bash", "-c", bashCmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)
