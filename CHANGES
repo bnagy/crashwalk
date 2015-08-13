@@ -25,3 +25,7 @@ Jul 15, 2015:
 
 - Rename -auto option to -afl
 - Add -ignore option to cwtriage to skip whole dirs
+
+August 13, 2015:
+
+- cwtriage - add support for triaging targets that take input over stdin
