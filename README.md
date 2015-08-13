@@ -30,7 +30,7 @@ To run the standalone cwtriage tool:
 
 ### AFL Mode
 
-If you're using AFL >= 1.50b then afl automatically records the command that was used in each crash dir ( in the README.txt file ). For most people, that means you can use the -auto switch to:
+If you're using AFL >= 1.50b then afl automatically records the command that was used in each crash dir ( in the README.txt file ). For most people, that means you can use the -afl switch to:
 - Automatically set the -match pattern to match AFL crashfiles
 - Automatically use the stored command from the README.txt in each crash directory
 - Automatically set the same memory limit
