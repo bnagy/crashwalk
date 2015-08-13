@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/bnagy/crashwalk/crash"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -374,11 +375,19 @@ func init() {
 
 // Run satisfies the crashwalk.Debugger interface. It runs a command under the
 // debugger.
-func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error) {
+func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (crash.Info, error) {
 
-	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 	var cmd *exec.Cmd
 	args := gdbArgs
+
+	sub := 0
+	for i, elem := range command {
+		if elem == "@@" {
+			sub++
+			command[i] = filename
+		}
+	}
+	cmdStr := strings.Join(append(gdbArgs, command...), " ")
 
 	if memlimit > 0 {
 		// TODO: This works around a Go limitation. There is no clean way to
@@ -404,8 +413,18 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 	cmd = exec.Command("gdb", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return crash.Info{}, fmt.Errorf("error creating pipe: %s", err)
+		return crash.Info{}, fmt.Errorf("error creating stdout pipe: %s", err)
 	}
+	// If there were no filename substitutions then the target must be
+	// expecting the file contents over stdin
+	var stdin io.WriteCloser
+	if sub == 0 {
+		stdin, err = cmd.StdinPipe()
+		if err != nil {
+			return crash.Info{}, fmt.Errorf("error creating stdin pipe: %s", err)
+		}
+	}
+
 	if err := cmd.Start(); err != nil {
 		return crash.Info{}, fmt.Errorf("error launching gdb: %s", err)
 	}
@@ -419,6 +438,16 @@ func (e *Engine) Run(command []string, memlimit, timeout int) (crash.Info, error
 				fmt.Fprintf(os.Stderr, "[DEBUG] killed by timer!\n")
 			},
 		)
+	}
+
+	if sub == 0 {
+		f, err := os.Open(filename)
+		if err != nil {
+			// bizarre, because it was checked by crashwalk
+			return crash.Info{}, fmt.Errorf("error reading crashfile for target stdin: %s", err)
+		}
+		io.Copy(stdin, f)
+		stdin.Close()
 	}
 	// We don't care about this error because we don't care about GDB's exit
 	// status.

@@ -143,7 +143,7 @@ func main() {
 		FilterFunc:  filter,
 		Workers:     *flagWorkers,
 		IncludeSeen: *includeSeen,
-		Auto:        *flagAfl,
+		Afl:         *flagAfl,
 		MemoryLimit: *flagMem,
 		Timeout:     *flagTimeout,
 	}
