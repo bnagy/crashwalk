@@ -29,3 +29,5 @@ Jul 15, 2015:
 August 13, 2015:
 
 - cwtriage - add support for triaging targets that take input over stdin
+- this fix required breaking the Debugger interface, so francis also needs
+  an update.
