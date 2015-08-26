@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,8 @@ var gdbBatch = []string{
 var gdbPrefix = []string{"-q", "--batch"}
 var gdbPostfix = []string{"--args"}
 var gdbArgs = gdbPrefix
+
+var subRegex = regexp.MustCompile("@@")
 
 // Example output
 /*
@@ -382,9 +385,9 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 
 	sub := 0
 	for i, elem := range command {
-		if elem == "@@" {
+		if subRegex.MatchString(elem) {
 			sub++
-			command[i] = filename
+			command[i] = subRegex.ReplaceAllString(elem, filename)
 		}
 	}
 	cmdStr := strings.Join(append(gdbArgs, command...), " ")
