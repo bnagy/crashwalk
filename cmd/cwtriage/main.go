@@ -27,7 +27,7 @@ var (
 	flagAfl       = flag.Bool("afl", false, "Prefer the AFL recorded crashing command, if present")
 	flagStrict    = flag.Bool("strict", false, "Abort the whole run if any crashes fail to repro")
 	flagMem       = flag.Int("mem", -1, "Memory limit for target processes (MB)")
-	flagTimeout   = flag.Int("t", -1, "Timeout for target processes (secs)")
+	flagTimeout   = flag.Int("t", 60, "Timeout for target processes (secs)")
 	flagEvery     = flag.Int("every", -1, "Run every n seconds")
 	flagOutput    = flag.String("output", "text", "Output format to use: [json pb text]")
 )
