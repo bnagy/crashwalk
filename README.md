@@ -14,18 +14,32 @@ To run the standalone cwtriage tool:
   Usage: cwtriage -root /path/to/afl-dir [-match pattern] -- /path/to/target -in @@ -out whatever
   ( @@ will be substituted for each crashfile )
 
-  -afl=false: Prefer the AFL recorded crashing command, if present
-  -engine="gdb": Debugging engine to use: [gdb lldb]
-  -every=-1: Run every n seconds
-  -ignore="": Directory skip pattern ( go regex syntax )
-  -match="": Match pattern for files ( go regex syntax )
-  -mem=-1: Memory limit for target processes (MB)
-  -output="text": Output format to use: [json pb text]
-  -root="": Root directory to look for crashes
-  -seen=false: Include seen results from the DB in the output
-  -strict=false: Abort the whole run if any crashes fail to repro
-  -t=-1: Timeout for target processes (secs)
-  -workers=1: Number of concurrent workers
+  -afl
+        Prefer the AFL recorded crashing command, if present
+  -engine string
+        Debugging engine to use: [gdb lldb] (default "gdb")
+  -every int
+        Run every n seconds (default -1)
+  -ignore string
+        Directory skip pattern ( go regex syntax )
+  -match string
+        Match pattern for files ( go regex syntax )
+  -mem int
+        Memory limit for target processes (MB) (default -1)
+  -output string
+        Output format to use: [json pb text] (default "text")
+  -root string
+        Root directory to look for crashes
+  -seen
+        Include seen results from the DB in the output
+  -strict
+        Abort the whole run if any crashes fail to repro
+  -t int
+        Timeout for target processes (secs) (default 60)
+  -tidy
+        Move crashes that error under Run() to a tidy dir
+  -workers int
+        Number of concurrent workers (default 1)
 ```
 
 ### AFL Mode
@@ -51,6 +65,11 @@ The tool creates a BoltDB (in the current directory, by default) that is used to
 ### Output Formats
 
 Supported output formats are JSON, protocol buffers or the text summary seen in the examples below. JSON and protbuf output is one crash per line, to facilitate piping that output to another process - for example to push each crash to a queue, write them to a database etc.
+
+
+### Tidy
+
+When you have crashfiles that don't repro under the debugger they are not added to the `cwtriage` cache database, which means that `cwtriage` will attempt to run then every time, even without `-seen`. If you have a lot of these files, or if they're particularly slow (such a memory eaters and hangs) then they can add a lot of time to each run. By using the `-tidy` flag, files that don't crash under the debugger will be moved to a directory at the same level. For AFL directories we substitute cwtidy for crashes, so you'll get 'cwtidy', 'cwtidy.2015-08-28-12:27:45' etc. For non-AFL use we just create a directory like 'cwtidy.<original dirname>'. 
 
 ## cwdump
 

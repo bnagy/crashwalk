@@ -31,3 +31,8 @@ August 13, 2015:
 - cwtriage - add support for triaging targets that take input over stdin
 - this fix required breaking the Debugger interface, so francis also needs
   an update.
+
+August 28, 2015:
+
+- cwtriage - substitute @@ markers inside argument strings (Issue #5)
+- cwtriage - add -tidy flag to move crashes that don't repro in cwtidy directories
