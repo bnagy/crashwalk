@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -96,6 +97,7 @@ type CrashwalkConfig struct {
 	Workers     int                     // number of workers to use
 	IncludeSeen bool                    // include seen crashes from the DB to the output channel
 	Afl         bool                    // Use the command from README.txt in AFL crash dirs
+	Tidy        bool                    // Move crashfiles that error in Run() to a tidy directory
 	MemoryLimit int                     // Memory limit (in MB ) to apply to targets ( via ulimit -v )
 	Timeout     int                     // Timeout (in secs ) to apply to targets
 }
@@ -124,6 +126,7 @@ type Job struct {
 }
 
 var bucketName = []byte("crashes")
+var crashesRegex = regexp.MustCompile("crashes")
 
 // NewCrashwalk creates a Crashwalk. Consult the information and warnings for
 // that struct.
@@ -298,6 +301,24 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			fmt.Fprintf(os.Stderr, "Error: %s\n---------\n", err)
 			if cw.config.Strict {
 				log.Fatalf("instrumentation fault in strict mode")
+			}
+			if cw.config.Tidy {
+				// afl names directories like crashes.2015-08-28-12:27:45 or
+				// just crashes. We will rename those to cwtidy and
+				// cwtidy.2015-08-28-12:27:45. For crash directories that
+				// don't contain "crashes" we'll just prepend "cwtidy." to the
+				// dirname and YOLO.
+				dir, fn := filepath.Split(job.Path)
+				subbed := crashesRegex.ReplaceAllString(dir, "cwtidy")
+				if subbed == dir {
+					base, dirname := filepath.Split(dir)
+					subbed = base + "cwtidy." + dirname
+				}
+				err := os.MkdirAll(subbed, 0700)
+				if err != nil {
+					log.Fatalf("unable to create tidy directory: %s", err)
+				}
+				os.Rename(job.Path, subbed+fn)
 			}
 			continue
 		}

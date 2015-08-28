@@ -467,7 +467,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 	start := bytes.Index(out, []byte("<EXPLOITABLE>"))
 
 	if start < 0 || len(out) == 0 || bytes.Contains(out, []byte("<REG>\n</REG>")) {
-		return crash.Info{}, fmt.Errorf("no gdb output")
+		return crash.Info{}, fmt.Errorf("no crash detected")
 	}
 
 	ci := parse(out[start:], cmdStr)

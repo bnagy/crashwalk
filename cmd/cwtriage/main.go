@@ -30,6 +30,7 @@ var (
 	flagTimeout   = flag.Int("t", 60, "Timeout for target processes (secs)")
 	flagEvery     = flag.Int("every", -1, "Run every n seconds")
 	flagOutput    = flag.String("output", "text", "Output format to use: [json pb text]")
+	flagTidy      = flag.Bool("tidy", false, "Move crashes that error under Run() to a tidy dir")
 )
 
 func main() {
@@ -89,7 +90,7 @@ func main() {
 		// unlikely. The other directories it skips are the queue and hang
 		// dirs, which means the walker doesn't need to visit each file in
 		// those directories (quite a big speedup)
-		skipRegex = regexp.MustCompile(".sync/|queue/|hang/")
+		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|cwtidy")
 	}
 
 	skipErr := errors.New("no match")
@@ -146,6 +147,7 @@ func main() {
 		Afl:         *flagAfl,
 		MemoryLimit: *flagMem,
 		Timeout:     *flagTimeout,
+		Tidy:        *flagTidy,
 	}
 
 	cw, err := crashwalk.NewCrashwalk(config)
