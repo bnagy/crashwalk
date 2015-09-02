@@ -89,8 +89,9 @@ func main() {
 		// This skips those, which might trip you up, although it seems
 		// unlikely. The other directories it skips are the queue and hang
 		// dirs, which means the walker doesn't need to visit each file in
-		// those directories (quite a big speedup)
-		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|cwtidy")
+		// those directories (quite a big speedup).
+		// UPDATE: we also skip our own .cwtidy directory, if present.
+		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|.cwtidy/")
 	}
 
 	skipErr := errors.New("no match")

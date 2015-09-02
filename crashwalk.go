@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -303,22 +304,17 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 				log.Fatalf("instrumentation fault in strict mode")
 			}
 			if cw.config.Tidy {
-				// afl names directories like crashes.2015-08-28-12:27:45 or
-				// just crashes. We will rename those to cwtidy and
-				// cwtidy.2015-08-28-12:27:45. For crash directories that
-				// don't contain "crashes" we'll just prepend "cwtidy." to the
-				// dirname and YOLO.
+				// Create a .cwtidy dir inside the crash dir. AFL renames
+				// crash directories as part of the resume process, so this is
+				// the best way to survive that process and know which tidied
+				// crashes belong to which crash dir
 				dir, fn := filepath.Split(job.Path)
-				subbed := crashesRegex.ReplaceAllString(dir, "cwtidy")
-				if subbed == dir {
-					base, dirname := filepath.Split(dir)
-					subbed = base + "cwtidy." + dirname
-				}
-				err := os.MkdirAll(subbed, 0700)
+				tidyDir := path.Join(dir, ".cwtidy")
+				err := os.MkdirAll(tidyDir, 0700)
 				if err != nil {
 					log.Fatalf("unable to create tidy directory: %s", err)
 				}
-				os.Rename(job.Path, subbed+fn)
+				os.Rename(job.Path, path.Join(tidyDir, fn))
 			}
 			continue
 		}
