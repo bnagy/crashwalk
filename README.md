@@ -69,7 +69,7 @@ Supported output formats are JSON, protocol buffers or the text summary seen in 
 
 ### Tidy
 
-When you have crashfiles that don't repro under the debugger they are not added to the `cwtriage` cache database, which means that `cwtriage` will attempt to run then every time, even without `-seen`. If you have a lot of these files, or if they're particularly slow (such a memory eaters and hangs) then they can add a lot of time to each run. By using the `-tidy` flag, files that don't crash under the debugger will be moved to a directory at the same level. For AFL directories we substitute cwtidy for crashes, so you'll get `cwtidy`, `cwtidy.2015-08-28-12:27:45` etc. For non-AFL use we just create a directory like `cwtidy.<original dirname>`. 
+When you have crashfiles that don't repro under the debugger they are not added to the `cwtriage` cache database, which means that `cwtriage` will attempt to run then every time, even without `-seen`. If you have a lot of these files, or if they're particularly slow (such a memory eaters and hangs) then they can add a lot of time to each run. By using the `-tidy` flag, files that don't crash under the debugger will be moved to a directory inside the crash directory.
 
 ## cwdump
 

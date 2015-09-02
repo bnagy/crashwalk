@@ -36,3 +36,7 @@ August 28, 2015:
 
 - cwtriage - substitute @@ markers inside argument strings (Issue #5)
 - cwtriage - add -tidy flag to move crashes that don't repro in cwtidy directories
+
+September 2, 2015:
+
+- cwtriage - change the location of tidied crashes. Now in .cwtidy inside the crash dir.
