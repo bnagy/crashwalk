@@ -92,6 +92,13 @@ func main() {
 		// those directories (quite a big speedup).
 		// UPDATE: we also skip our own .cwtidy directory, if present.
 		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|.cwtidy/")
+	} else {
+		// when people use manual mode via -match is surprises them when the
+		// .cwtidy directory is not ignored, so it makes sense to do that by
+		// default (#6). They can always unignore it by manually specifying
+		// something else with -ignore if they want to re-try tidied
+		// crashfiles.
+		skipRegex = regexp.MustCompile(".cwtidy/")
 	}
 
 	skipErr := errors.New("no match")
