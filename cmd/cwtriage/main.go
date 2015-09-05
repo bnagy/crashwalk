@@ -61,7 +61,7 @@ func main() {
 
 	if *matchPattern == "" {
 		if *flagAfl {
-			*matchPattern = "crashes.*id"
+			*matchPattern = "crashes.*id:"
 		} else {
 			*matchPattern = ".*"
 		}
@@ -91,7 +91,7 @@ func main() {
 		// dirs, which means the walker doesn't need to visit each file in
 		// those directories (quite a big speedup).
 		// UPDATE: we also skip our own .cwtidy directory, if present.
-		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|.cwtidy")
+		skipRegex = regexp.MustCompile(".sync/|queue/|hang/|.cwtidy/")
 	} else {
 		// when people use manual mode via -match is surprises them when the
 		// .cwtidy directory is not ignored, so it makes sense to do that by
