@@ -31,6 +31,7 @@ var (
 	flagEvery     = flag.Int("every", -1, "Run every n seconds")
 	flagOutput    = flag.String("output", "text", "Output format to use: [json pb text]")
 	flagTidy      = flag.Bool("tidy", false, "Move crashes that error under Run() to a tidy dir")
+	flagFile      = flag.String("f", "", "Template filename to use while running crash")
 )
 
 func main() {
@@ -104,7 +105,10 @@ func main() {
 	skipErr := errors.New("no match")
 	filter := func(path string) error {
 		if skipRegex != nil && skipRegex.MatchString(path) {
-			// Whole directory will not be entered
+			// Whole directory will be exited. Note that the directory itself
+			// (without the /) will first be evaluated as a file. This is why
+			// .cwtidy was erroneously passing, since it matched crash.*id but not
+			// .cwtidy/ (no trailing slash)
 			return filepath.SkipDir
 		}
 		if crashRegex.MatchString(path) {
@@ -144,6 +148,37 @@ func main() {
 	case "text":
 	}
 
+	// If the user provided a template filename, create or check the base path
+	// before we go any further.
+	if *flagFile != "" {
+
+		// Is the directory OK ( create if it doesn't exist )
+		base, _ := path.Split(*flagFile)
+		err := os.MkdirAll(base, 0700)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  FATAL: failed sanity check for -f: %s\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
+
+		// Can we create files there?
+		fd, err := os.Create(path.Join(base, "cwtriage.test"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  FATAL: failed sanity check for -f: %s\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
+
+		// Clean up.
+		fd.Close()
+		err = os.Remove(path.Join(base, "cwtriage.test"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  FATAL: failed sanity check for -f: %s\n", err)
+			flag.Usage()
+			os.Exit(1)
+		}
+	}
+
 	config := crashwalk.CrashwalkConfig{
 		Command:     command,
 		Strict:      *flagStrict,
@@ -156,6 +191,7 @@ func main() {
 		MemoryLimit: *flagMem,
 		Timeout:     *flagTimeout,
 		Tidy:        *flagTidy,
+		File:        *flagFile,
 	}
 
 	cw, err := crashwalk.NewCrashwalk(config)

@@ -7,6 +7,7 @@ package crashwalk
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -31,6 +32,56 @@ const MEMORY_LIMIT_MAX = 4096
 
 // Maximum value for the Timeout config option (in secs)
 const TIMEOUT_MAX = 300
+
+// Debugger is a simple interface that allows different debugger backends
+// to be used by this package ( GDB, LLDB etc )
+type Debugger interface {
+	Run(command []string, filename string, memlimit, timeout int) (crash.Info, error)
+}
+
+// CrashwalkConfig is used to set the assorted configuration options for
+// NewCrashwalk()
+type CrashwalkConfig struct {
+	FilterFunc  func(path string) error // Can be supplied by the user to filter non-crashes in a directory tree
+	SeenDB      string                  // path to BoltDB (stores already processed crash info)
+	Command     []string                // command to test crashfiles against
+	Strict      bool                    // abort if any instrumentation calls error
+	Debugger    Debugger                // A debugger that implements our interface
+	Root        string                  // Root for the filepath.Walk
+	Workers     int                     // number of workers to use
+	IncludeSeen bool                    // include seen crashes from the DB to the output channel
+	Afl         bool                    // Use the command from README.txt in AFL crash dirs
+	Tidy        bool                    // Move crashfiles that error in Run() to a tidy directory
+	MemoryLimit int                     // Memory limit (in MB ) to apply to targets ( via ulimit -v )
+	Timeout     int                     // Timeout (in secs ) to apply to targets
+	File        string                  // Template filename to use. Workers use the base dir an extension with a random name
+}
+
+// Crashwalk is used to Run() walk instances, using the supplied config. Walks
+// are not designed to be externally threadsafe, but can be configured to use
+// multiple goroutines internally. Simultaneous calls to Run() from multiple
+// goroutines will be serialised via an internal mutex.
+type Crashwalk struct {
+	root   string // root directory to walk for crashes
+	config CrashwalkConfig
+	db     *bolt.DB
+	// for afl crash dirs containing a README.txt with metadata about the
+	// command that was run to get this crash
+	commandCache map[string][]string
+	debugger     Debugger
+	sync.Mutex
+}
+
+// Job is the basic unit of work that will be passed to the configured
+// Debugger
+type Job struct {
+	Path    string
+	Info    os.FileInfo
+	Command []string
+}
+
+var bucketName = []byte("crashes")
+var crashesRegex = regexp.MustCompile("crashes")
 
 // Summarize presents a nicely formatted, human readable summary of the crash.
 // Quite a lot of analysis can be performed by combining this output with
@@ -79,55 +130,6 @@ func Summarize(c crash.Crash) string {
 	fmt.Fprintf(&buf, "---END SUMMARY---")
 	return buf.String()
 }
-
-// Debugger is a simple interface that allows different debugger backends
-// to be used by this package ( GDB, LLDB etc )
-type Debugger interface {
-	Run(command []string, filename string, memlimit, timeout int) (crash.Info, error)
-}
-
-// CrashwalkConfig is used to set the assorted configuration options for
-// NewCrashwalk()
-type CrashwalkConfig struct {
-	FilterFunc  func(path string) error // Can be supplied by the user to filter non-crashes in a directory tree
-	SeenDB      string                  // path to BoltDB (stores already processed crash info)
-	Command     []string                // command to test crashfiles against
-	Strict      bool                    // abort if any instrumentation calls error
-	Debugger    Debugger                // A debugger that implements our interface
-	Root        string                  // Root for the filepath.Walk
-	Workers     int                     // number of workers to use
-	IncludeSeen bool                    // include seen crashes from the DB to the output channel
-	Afl         bool                    // Use the command from README.txt in AFL crash dirs
-	Tidy        bool                    // Move crashfiles that error in Run() to a tidy directory
-	MemoryLimit int                     // Memory limit (in MB ) to apply to targets ( via ulimit -v )
-	Timeout     int                     // Timeout (in secs ) to apply to targets
-}
-
-// Crashwalk is used to Run() walk instances, using the supplied config. Walks
-// are not designed to be externally threadsafe, but can be configured to use
-// multiple goroutines internally. Simultaneous calls to Run() from multiple
-// goroutines will be serialised via an internal mutex.
-type Crashwalk struct {
-	root   string // root directory to walk for crashes
-	config CrashwalkConfig
-	db     *bolt.DB
-	// for afl crash dirs containing a README.txt with metadata about the
-	// command that was run to get this crash
-	commandCache map[string][]string
-	debugger     Debugger
-	sync.Mutex
-}
-
-// Job is the basic unit of work that will be passed to the configured
-// Debugger
-type Job struct {
-	Path    string
-	Info    os.FileInfo
-	Command []string
-}
-
-var bucketName = []byte("crashes")
-var crashesRegex = regexp.MustCompile("crashes")
 
 // NewCrashwalk creates a Crashwalk. Consult the information and warnings for
 // that struct.
@@ -209,17 +211,46 @@ func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 
 }
 
+func randomName(n int) (result string) {
+	buf := make([]byte, n)
+	_, err := io.ReadFull(rand.Reader, buf)
+	if err != nil {
+		panic(err)
+	}
+	for _, b := range buf {
+		result += string(b%26 + 0x61)
+	}
+	return
+}
+
 func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 	hsh := sha1.New()
 	cachedCE := &crash.Entry{}
 	newCE := &crash.Entry{}
+	tempFn := ""
+
+	// Create a randomised template filename when this worker starts and use
+	// it for all jobs.
+	if cw.config.File != "" {
+		base, _ := path.Split(cw.config.File)
+		ext := path.Ext(cw.config.File)
+		// Is the directory OK ( create if it doesn't exist )
+		err := os.MkdirAll(base, 0700)
+		if err != nil {
+			log.Fatalf("bad config.File: %s\n", err)
+		}
+		s := randomName(8)
+		tempFn = path.Join(base, s+ext)
+		defer os.Remove(tempFn)
+	}
 
 	for job := range jobs {
 
 		var thisCmd []string
-		// sub the filename into a copy of the template command
+		thisFn := job.Path
+
 		if job.Command != nil {
 			thisCmd = make([]string, len(job.Command))
 			copy(thisCmd, job.Command)
@@ -294,11 +325,31 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		//  - we lost a View() race ( should be impossible in this architecture )
 
 		// run it under the debugger
-		info, err := cw.debugger.Run(thisCmd, job.Path, cw.config.MemoryLimit, cw.config.Timeout)
+
+		// Write the crash to the template path, if applicable
+		if tempFn != "" {
+			// Create() truncates any existing file, so we don't need to
+			// Remove() until all the jobs are done
+			tf, err := os.Create(tempFn)
+			if err != nil {
+				log.Fatalf("error creating temp crashfile: %s", err)
+			}
+			_, err = tf.Write(crashData)
+			if err != nil {
+				log.Fatalf("error writing to temp crashfile: %s", err)
+			}
+			tf.Close()
+			thisFn = tempFn
+		}
+
+		info, err := cw.debugger.Run(thisCmd, thisFn, cw.config.MemoryLimit, cw.config.Timeout)
 		if err != nil {
 			log.Printf("------\n")
 			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
 			fmt.Fprintf(os.Stderr, "File: %s\n", job.Path)
+			if tempFn != "" {
+				fmt.Fprintf(os.Stderr, "Tempfile: %s\n", thisFn)
+			}
 			fmt.Fprintf(os.Stderr, "Error: %s\n---------\n", err)
 			if cw.config.Strict {
 				log.Fatalf("instrumentation fault in strict mode")
@@ -364,7 +415,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 
 		// send it!
 		crashes <- crash.Crash{Entry: *newCE, Data: crashData}
-	}
+	} // end of jobs
 	// All done. wg will be closed by defer.
 }
 
