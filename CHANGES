@@ -40,3 +40,7 @@ August 28, 2015:
 September 2, 2015:
 
 - cwtriage - change the location of tidied crashes. Now in .cwtidy inside the crash dir.
+
+September 6, 2015:
+
+- Add limited -f support, see README.md
