@@ -77,7 +77,7 @@ If you have an app that expects a certain extension you can use the `-f` option,
 
 ## cwdump
 
-`cwdump` summarizes crashes in a crashwalk database by major / minor stack hash. Although AFL (for example) already de-dups crashes, bucketing summarizes those crashes by an order of magnitude or more. Crashes that bucket the same have _exactly_ the same stack contents, so they're likely (not guaranteed) to be the same bug.
+`cwdump` summarizes crashes in a crashwalk database by major / minor stack hash. Although AFL (for example) already de-dupes crashes, bucketing summarizes those crashes by an order of magnitude or more. Crashes that bucket the same have _exactly_ the same stack contents, so they're likely (not guaranteed) to be the same bug.
 
 Run `cwtriage` as above and then do something like
 ```
