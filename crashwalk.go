@@ -534,7 +534,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 
 					dn, _ := filepath.Split(path)
 					// Parse the README.txt each time we enter a new crash dir
-					if cj, found := cw.jobCache[dn]; !found {
+					if _, found := cw.jobCache[dn]; !found {
 						// First hit for this dir
 						readme, err := os.Open(filepath.Join(dn, "README.txt"))
 						if err != nil {
