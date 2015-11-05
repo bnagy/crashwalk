@@ -345,11 +345,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			// If this hits a log.Fatalf statement the tempfile is not deleted
 			// (for debugging purposes)
 			log.Printf("------\n")
-			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
-			fmt.Fprintf(os.Stderr, "File: %s\n", job.InFile)
-			if tempFn != "" {
-				fmt.Fprintf(os.Stderr, "Tempfile: %s\n", thisFn)
-			}
+			fmt.Fprintf(os.Stderr, "Job:\n%#v\n", job)
 			fmt.Fprintf(os.Stderr, "Error: %s\n---------\n", err)
 			if cw.config.Strict {
 				log.Fatalf("instrumentation fault in strict mode")
