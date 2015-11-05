@@ -54,7 +54,7 @@ type CrashwalkConfig struct {
 	Tidy        bool                    // Move crashfiles that error in Run() to a tidy directory
 	MemoryLimit int                     // Memory limit (in MB ) to apply to targets ( via ulimit -v )
 	Timeout     int                     // Timeout (in secs ) to apply to targets
-	File        string                  // Template filename to use. Workers use the base dir an extension with a random name
+	File        string                  // Template filename to use. Workers use the base dir and extension with a random name
 }
 
 // Crashwalk is used to Run() walk instances, using the supplied config. Walks
@@ -419,7 +419,11 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 	// All done. wg will be closed by defer.
 }
 
-func parseReadmeCommand(f *os.File) (cmd []string, memlimit int) {
+// We want to extract three things:
+// - The target command to invoke
+// - The memory limit AFL used while fuzzing
+// - (if present) the -f option to the AFL command (which we'll use as a template)
+func parseReadmeCommand(f *os.File) (cmd []string, memlimit int, aflFname string) {
 	// Command line used to find this crash:
 	//
 	// ./afl-fuzz -i /Users/ben/src/afl-1.36b/testcases/others/pdf/ -o /Volumes/ramdisk/popplFIXED -d -x /Users/ben/scratch/pdfextras -T pdftoppm FIXED -- /Users/ben/src/poppler-0.31.0/utils/pdftoppm -aa no -r 36 -png @@
@@ -452,6 +456,14 @@ func parseReadmeCommand(f *os.File) (cmd []string, memlimit int) {
 			}
 		}
 	}
+
+	aflCmd := strings.Split(subst[0], " ")
+	for i, s := range aflCmd {
+		if s == "-f" {
+			aflFname = aflCmd[i+1]
+		}
+	}
+
 	return
 }
 
@@ -520,14 +532,18 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 					// (there for about 30 minor versions)
 					dn, _ := filepath.Split(path)
 
-					if cached := cw.commandCache[dn]; cached == nil {
+					if cw.commandCache[dn] == nil {
 						// First hit for this dir
 						readme, err := os.Open(filepath.Join(dn, "README.txt"))
 						if err != nil {
 							// persistent "don't bother"
 							cw.commandCache[dn] = []string{}
 						} else {
-							cw.commandCache[dn], cw.config.MemoryLimit = parseReadmeCommand(readme)
+							// We automatically use the -f option to AFL as a
+							// template filename when running repros in -afl
+							// mode. If that doesn't suit then don't use -afl
+							// and specify everything manually.
+							cw.commandCache[dn], cw.config.MemoryLimit, cw.config.File = parseReadmeCommand(readme)
 						}
 					}
 
