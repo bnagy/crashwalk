@@ -67,17 +67,20 @@ type Crashwalk struct {
 	db     *bolt.DB
 	// for afl crash dirs containing a README.txt with metadata about the
 	// command that was run to get this crash
-	commandCache map[string][]string
-	debugger     Debugger
+	jobCache map[string]Job
+	debugger Debugger
 	sync.Mutex
 }
 
 // Job is the basic unit of work that will be passed to the configured
 // Debugger
 type Job struct {
-	Path    string
-	Info    os.FileInfo
-	Command []string
+	InFile      string
+	InFileInfo  os.FileInfo
+	OutFile     string
+	MemoryLimit int
+	Timeout     int
+	Command     []string
 }
 
 var bucketName = []byte("crashes")
@@ -136,7 +139,7 @@ func Summarize(c crash.Crash) string {
 func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 
 	cw := &Crashwalk{}
-	cw.commandCache = make(map[string][]string)
+	cw.jobCache = make(map[string]Job)
 	cw.debugger = config.Debugger //can't test this here
 
 	fd, err := os.Open(config.Root)
@@ -229,27 +232,24 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 	hsh := sha1.New()
 	cachedCE := &crash.Entry{}
 	newCE := &crash.Entry{}
-	tempFn := ""
-
-	// Create a randomised template filename when this worker starts and use
-	// it for all jobs.
-	if cw.config.File != "" {
-		base, _ := path.Split(cw.config.File)
-		ext := path.Ext(cw.config.File)
-		// Is the directory OK ( create if it doesn't exist )
-		err := os.MkdirAll(base, 0700)
-		if err != nil {
-			log.Fatalf("bad config.File: %s\n", err)
-		}
-		s := randomName(8)
-		tempFn = path.Join(base, s+ext)
-		defer os.Remove(tempFn)
-	}
+	myRandom := randomName(8)
 
 	for job := range jobs {
 
 		var thisCmd []string
-		thisFn := job.Path
+		thisFn := job.InFile
+		tempFn := ""
+
+		if job.OutFile != "" {
+			base, _ := path.Split(job.OutFile)
+			ext := path.Ext(job.OutFile)
+			// Is the directory OK ( create if it doesn't exist )
+			err := os.MkdirAll(base, 0700)
+			if err != nil {
+				log.Fatalf("bad directory for tempfile: %s\n", err)
+			}
+			tempFn = path.Join(base, myRandom+ext)
+		}
 
 		if job.Command != nil {
 			thisCmd = make([]string, len(job.Command))
@@ -262,9 +262,9 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			log.Fatalf("internal error: Job command too short: %v\n", job)
 		}
 
-		f, err := os.Open(job.Path)
+		f, err := os.Open(job.InFile)
 		if err != nil {
-			log.Printf("couldn't open file %s: %s", job.Path, err)
+			log.Printf("couldn't open file %s: %s", job.InFile, err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")
 			}
@@ -277,7 +277,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		crashData, err := ioutil.ReadAll(tr)
 		f.Close()
 		if err != nil {
-			log.Printf("couldn't read file %s: %s", job.Path, err)
+			log.Printf("couldn't read file %s: %s", job.InFile, err)
 			if cw.config.Strict {
 				log.Fatalf("[Instrumentation fault in strict mode]")
 			}
@@ -287,7 +287,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 		hsh.Reset()
 
 		// Now calculate the tag sha1(path || cmd)
-		hsh.Write([]byte(job.Path))
+		hsh.Write([]byte(job.InFile))
 		hsh.Write([]byte(strings.Join(thisCmd, " ")))
 		tag := hsh.Sum(nil)
 		hsh.Reset()
@@ -326,27 +326,27 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 
 		// run it under the debugger
 
-		// Write the crash to the template path, if applicable
+		// Write the crash to a tempfile if applicable
 		if tempFn != "" {
-			// Create() truncates any existing file, so we don't need to
-			// Remove() until all the jobs are done
 			tf, err := os.Create(tempFn)
 			if err != nil {
-				log.Fatalf("error creating temp crashfile: %s", err)
+				log.Fatalf("error creating tempfile: %s", err)
 			}
 			_, err = tf.Write(crashData)
 			if err != nil {
-				log.Fatalf("error writing to temp crashfile: %s", err)
+				log.Fatalf("error writing to tempfile: %s", err)
 			}
 			tf.Close()
 			thisFn = tempFn
 		}
 
-		info, err := cw.debugger.Run(thisCmd, thisFn, cw.config.MemoryLimit, cw.config.Timeout)
+		info, err := cw.debugger.Run(thisCmd, thisFn, job.MemoryLimit, job.Timeout)
 		if err != nil {
+			// If this hits a log.Fatalf statement the tempfile is not deleted
+			// (for debugging purposes)
 			log.Printf("------\n")
 			fmt.Fprintf(os.Stderr, "Command: %s\n", strings.Join(thisCmd, " "))
-			fmt.Fprintf(os.Stderr, "File: %s\n", job.Path)
+			fmt.Fprintf(os.Stderr, "File: %s\n", job.InFile)
 			if tempFn != "" {
 				fmt.Fprintf(os.Stderr, "Tempfile: %s\n", thisFn)
 			}
@@ -359,21 +359,25 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 				// crash directories as part of the resume process, so this is
 				// the best way to survive that process and know which tidied
 				// crashes belong to which crash dir
-				dir, fn := filepath.Split(job.Path)
+				dir, fn := filepath.Split(job.InFile)
 				tidyDir := path.Join(dir, ".cwtidy")
 				err := os.MkdirAll(tidyDir, 0700)
 				if err != nil {
 					log.Fatalf("unable to create tidy directory: %s", err)
 				}
-				os.Rename(job.Path, path.Join(tidyDir, fn))
+				os.Rename(job.InFile, path.Join(tidyDir, fn))
 			}
 			continue
 		}
 
+		if tempFn != "" {
+			os.Remove(tempFn)
+		}
+
 		newCE.Reset()
 		newCE.Info = info
-		newCE.Timestamp = job.Info.ModTime().Unix()
-		newCE.OrigFilename = job.Path
+		newCE.Timestamp = job.InFileInfo.ModTime().Unix()
+		newCE.OrigFilename = job.InFile
 		newCE.SHA1 = hshCrash
 		newCE.Command = thisCmd
 		newBytes, err := proto.Marshal(newCE)
@@ -443,7 +447,7 @@ func parseReadmeCommand(f *os.File) (cmd []string, memlimit int, aflFname string
 	scanner.Scan()
 	subst := strings.SplitN(scanner.Text(), " -- ", 2)
 	if len(subst) != 2 {
-		return
+		log.Fatalf("Couldn't parse AFL commandline in %s\n", f.Name())
 	}
 	cmd = strings.Split(subst[1], " ")
 	for scanner.Scan() {
@@ -491,8 +495,9 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 	if err != nil {
 		log.Fatalf("error creating bucket: %s", err)
 	}
-	cw.db = db
 
+	cw.db = db
+	cw.jobCache = make(map[string]Job)
 	wg := &sync.WaitGroup{}
 	jobs := make(chan Job)
 
@@ -504,6 +509,9 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 
 	// kick off filepath walk
 	go func() {
+
+		// This only runs in one thread, so we can cache per-directory values
+		// to use when creating Jobs for the workers.
 
 		filepath.Walk(
 			cw.root,
@@ -523,45 +531,39 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 				}
 
 				if cw.config.Afl {
-					// -afl options take precedence over options given on the
-					// command line. This lets you specify "defaults" for
-					// -afl when README.txt files aren't found or can't be
-					// parsed.
-					//
-					// (that shouldn't ever happen now, README.txt has been
-					// (there for about 30 minor versions)
-					dn, _ := filepath.Split(path)
 
-					if cw.commandCache[dn] == nil {
+					dn, _ := filepath.Split(path)
+					// Parse the README.txt each time we enter a new crash dir
+					var cj Job
+					if cj, found := cw.jobCache[dn]; !found {
 						// First hit for this dir
 						readme, err := os.Open(filepath.Join(dn, "README.txt"))
 						if err != nil {
-							// persistent "don't bother"
-							cw.commandCache[dn] = []string{}
-						} else {
-							// We automatically use the -f option to AFL as a
-							// template filename when running repros in -afl
-							// mode. If that doesn't suit then don't use -afl
-							// and specify everything manually.
-							cw.commandCache[dn], cw.config.MemoryLimit, cw.config.File = parseReadmeCommand(readme)
+							log.Fatalf("Unable to read README.txt for -afl")
 						}
+						cmd, ml, outFn := parseReadmeCommand(readme)
+						cj = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
+						cw.jobCache[dn] = cj
 					}
 
-					if cached := cw.commandCache[dn]; len(cached) > 0 {
-						// There's an entry and it's not an empty slice
-						jobs <- Job{Path: path, Info: info, Command: cached}
-						return nil
+					jobs <- Job{
+						InFile:      path,
+						InFileInfo:  info,
+						Command:     cj.Command,
+						OutFile:     cj.OutFile,
+						MemoryLimit: cj.MemoryLimit,
 					}
-
-					if cw.config.Command == nil || len(cw.config.Command) < 2 {
-						if !cw.config.Strict {
-							return nil
-						}
-						log.Fatalf("[STRICT MODE] unable to parse README.txt for -auto and no defaults given.")
-					}
+					return nil
 				}
 
-				jobs <- Job{Path: path, Info: info}
+				jobs <- Job{
+					InFile:      path,
+					InFileInfo:  info,
+					Command:     cw.config.Command,
+					OutFile:     cw.config.File,
+					MemoryLimit: cw.config.MemoryLimit,
+				}
+
 				return nil
 			})
 
