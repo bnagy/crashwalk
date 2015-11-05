@@ -450,22 +450,24 @@ func parseReadmeCommand(f *os.File) (cmd []string, memlimit int, aflFname string
 		log.Fatalf("Couldn't parse AFL commandline in %s\n", f.Name())
 	}
 	cmd = strings.Split(subst[1], " ")
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), "The limit used for this fuzzing session") {
-			ff := strings.Fields(scanner.Text())
-			if len(ff) > 9 && ff[len(ff)-1] == "MB." {
-				if flt, err := strconv.ParseFloat(ff[len(ff)-2], 64); err == nil {
-					memlimit = int(flt)
-				}
-			}
-		}
-	}
 
 	aflCmd := strings.Split(subst[0], " ")
 	for i, s := range aflCmd {
 		if s == "-f" {
 			aflFname = aflCmd[i+1]
 		}
+		if s == "-m" {
+			if aflCmd[i+1] == "none" {
+				memlimit = -1
+			} else {
+				memlimit, _ = strconv.Atoi(aflCmd[i+1])
+			}
+		}
+	}
+
+	// Default mem limit is 50MB
+	if memlimit == 0 {
+		memlimit = 50
 	}
 
 	return
