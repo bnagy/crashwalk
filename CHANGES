@@ -44,3 +44,8 @@ September 2, 2015:
 September 6, 2015:
 
 - Add limited -f support, see README.md
+
+November 5, 2015:
+
+- -afl now picks up -m and -f options from README.txt
+- (internal) crashwalk now dispatches job options per job instead of via global config

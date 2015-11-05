@@ -50,6 +50,7 @@ If you're using AFL >= 1.50b then afl automatically records the command that was
 - Automatically use the stored command from the README.txt in each crash directory
 - Automatically set the same memory limit
 - Automatically ignore queue/ and hang/ directories
+- Automatically pick up `-f` template configuration from README.txt
 - Use the supplied command (if any) as a default
 
 If you are in the directory that contains your individual fuzz workers, then the minimal command would be something like
@@ -74,6 +75,8 @@ When you have crashfiles that don't repro under the debugger they are not added 
 ### -f
 
 If you have an app that expects a certain extension you can use the `-f` option, with some limitations. Because we support multiple workers, you can't specify an exact output file. Any file you specify, like `/dev/shm/blah.txt` will be used as a template, and each worker will copy the crashdata for each crash into a randomised 8 character name like `/dev/shm/fjsyvnsh.txt`, cleaning up at the end.
+
+*NOTE* `-afl` mode will automatically do this for you if you used a `-f` option to `afl-fuzz` or `afl-launch`, so you don't need to pass this option.
 
 ## cwdump
 
