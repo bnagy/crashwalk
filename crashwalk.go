@@ -259,7 +259,7 @@ func process(cw *Crashwalk, jobs <-chan Job, crashes chan<- crash.Crash, wg *syn
 			copy(thisCmd, cw.config.Command)
 		}
 		if len(thisCmd) == 0 {
-			log.Fatalf("internal error: Job command too short: %v\n", job)
+			log.Fatalf("internal error: Job command too short: %#v\n", job)
 		}
 
 		f, err := os.Open(job.InFile)
@@ -534,7 +534,6 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 
 					dn, _ := filepath.Split(path)
 					// Parse the README.txt each time we enter a new crash dir
-					var cj Job
 					if cj, found := cw.jobCache[dn]; !found {
 						// First hit for this dir
 						readme, err := os.Open(filepath.Join(dn, "README.txt"))
@@ -542,16 +541,15 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 							log.Fatalf("Unable to read README.txt for -afl")
 						}
 						cmd, ml, outFn := parseReadmeCommand(readme)
-						cj = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
-						cw.jobCache[dn] = cj
+						cw.jobCache[dn] = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
 					}
 
 					jobs <- Job{
 						InFile:      path,
 						InFileInfo:  info,
-						Command:     cj.Command,
-						OutFile:     cj.OutFile,
-						MemoryLimit: cj.MemoryLimit,
+						Command:     cw.jobCache[dn].Command,
+						OutFile:     cw.jobCache[dn].OutFile,
+						MemoryLimit: cw.jobCache[dn].MemoryLimit,
 					}
 					return nil
 				}
