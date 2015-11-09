@@ -381,6 +381,7 @@ func init() {
 func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (crash.Info, error) {
 
 	var cmd *exec.Cmd
+	var t *time.Timer
 	args := []string{}
 	copy(args, gdbArgs)
 
@@ -433,7 +434,6 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		return crash.Info{}, fmt.Errorf("error launching gdb: %s", err)
 	}
 
-	var t *time.Timer
 	if timeout > 0 {
 		t = time.AfterFunc(
 			time.Duration(timeout)*time.Second,
@@ -454,7 +454,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 		stdin.Close()
 	}
 	// We don't care about this error because we don't care about GDB's exit
-	// status.
+	// status (we just panic if we can't parse the output)
 	out, _ := ioutil.ReadAll(stdout)
 	cmd.Wait()
 	if t != nil {

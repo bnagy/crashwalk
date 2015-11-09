@@ -77,6 +77,9 @@ type Crashwalk struct {
 	sync.Mutex
 }
 
+// CachedDirJob is used during -afl mode to cache the results of parsing AFL's
+// README.txt file, which contains the command, template filename and memory
+// limit that were used for all crashes in that directory.
 func (cw *Crashwalk) CachedDirJob(dn string) Job {
 	cw.jc.Lock()
 	defer cw.jc.Unlock()
