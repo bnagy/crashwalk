@@ -57,6 +57,11 @@ type CrashwalkConfig struct {
 	File        string                  // Template filename to use. Workers use the base dir and extension with a random name
 }
 
+type jobCache struct {
+	cache map[string]Job
+	sync.RWMutex
+}
+
 // Crashwalk is used to Run() walk instances, using the supplied config. Walks
 // are not designed to be externally threadsafe, but can be configured to use
 // multiple goroutines internally. Simultaneous calls to Run() from multiple
@@ -67,9 +72,37 @@ type Crashwalk struct {
 	db     *bolt.DB
 	// for afl crash dirs containing a README.txt with metadata about the
 	// command that was run to get this crash
-	jobCache map[string]Job
+	jc       jobCache
 	debugger Debugger
 	sync.Mutex
+}
+
+func (cw *Crashwalk) CachedDirJob(dn string) Job {
+	cw.jc.RLock()
+
+	if _, found := cw.jc.cache[dn]; !found {
+		// First hit for this dir
+		readme, err := os.Open(filepath.Join(dn, "README.txt"))
+		if err != nil {
+			log.Fatalf("Unable to read README.txt for -afl")
+		}
+		cmd, ml, outFn := parseReadmeCommand(readme)
+		cw.jc.Lock()
+		// Check once more in case we're racing to be first Lock()
+		if _, found := cw.jc.cache[dn]; !found {
+			cw.jc.cache[dn] = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
+		}
+		cw.jc.Unlock()
+	}
+
+	// Fill in just the cached fields
+	j := Job{
+		Command:     cw.jc.cache[dn].Command,
+		OutFile:     cw.jc.cache[dn].OutFile,
+		MemoryLimit: cw.jc.cache[dn].MemoryLimit,
+	}
+	cw.jc.RUnlock()
+	return j
 }
 
 // Job is the basic unit of work that will be passed to the configured
@@ -139,7 +172,6 @@ func Summarize(c crash.Crash) string {
 func NewCrashwalk(config CrashwalkConfig) (*Crashwalk, error) {
 
 	cw := &Crashwalk{}
-	cw.jobCache = make(map[string]Job)
 	cw.debugger = config.Debugger //can't test this here
 
 	fd, err := os.Open(config.Root)
@@ -501,7 +533,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 	}
 
 	cw.db = db
-	cw.jobCache = make(map[string]Job)
+	cw.jc = jobCache{cache: make(map[string]Job)}
 	wg := &sync.WaitGroup{}
 	jobs := make(chan Job)
 
@@ -535,27 +567,12 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 				}
 
 				if cw.config.Afl {
-
 					dn, _ := filepath.Split(path)
-					// Parse the README.txt each time we enter a new crash dir
-					if _, found := cw.jobCache[dn]; !found {
-						// First hit for this dir
-						readme, err := os.Open(filepath.Join(dn, "README.txt"))
-						if err != nil {
-							log.Fatalf("Unable to read README.txt for -afl")
-						}
-						cmd, ml, outFn := parseReadmeCommand(readme)
-						cw.jobCache[dn] = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
-					}
-
-					jobs <- Job{
-						InFile:      path,
-						InFileInfo:  info,
-						Command:     cw.jobCache[dn].Command,
-						OutFile:     cw.jobCache[dn].OutFile,
-						MemoryLimit: cw.jobCache[dn].MemoryLimit,
-						Timeout:     cw.config.Timeout,
-					}
+					j := cw.CachedDirJob(dn)
+					j.InFile = path
+					j.InFileInfo = info
+					j.Timeout = cw.config.Timeout
+					jobs <- j
 					return nil
 				}
 
