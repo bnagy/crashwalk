@@ -391,7 +391,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 			command[i] = subRegex.ReplaceAllString(elem, filename)
 		}
 	}
-	cmdStr := strings.Join(append(gdbArgs, command...), " ")
+	cmdStr := strings.Join(append(args, command...), " ")
 
 	if memlimit > 0 {
 		// TODO: This works around a Go limitation. There is no clean way to
