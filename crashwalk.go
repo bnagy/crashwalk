@@ -554,6 +554,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 						Command:     cw.jobCache[dn].Command,
 						OutFile:     cw.jobCache[dn].OutFile,
 						MemoryLimit: cw.jobCache[dn].MemoryLimit,
+						Timeout:     cw.config.Timeout,
 					}
 					return nil
 				}
@@ -564,6 +565,7 @@ func (cw *Crashwalk) Run() <-chan crash.Crash {
 					Command:     cw.config.Command,
 					OutFile:     cw.config.File,
 					MemoryLimit: cw.config.MemoryLimit,
+					Timeout:     cw.config.Timeout,
 				}
 
 				return nil
