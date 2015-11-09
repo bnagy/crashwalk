@@ -59,7 +59,7 @@ type CrashwalkConfig struct {
 
 type jobCache struct {
 	cache map[string]Job
-	sync.RWMutex
+	sync.Mutex
 }
 
 // Crashwalk is used to Run() walk instances, using the supplied config. Walks
@@ -78,7 +78,8 @@ type Crashwalk struct {
 }
 
 func (cw *Crashwalk) CachedDirJob(dn string) Job {
-	cw.jc.RLock()
+	cw.jc.Lock()
+	defer cw.jc.Unlock()
 
 	if _, found := cw.jc.cache[dn]; !found {
 		// First hit for this dir
@@ -87,21 +88,14 @@ func (cw *Crashwalk) CachedDirJob(dn string) Job {
 			log.Fatalf("Unable to read README.txt for -afl")
 		}
 		cmd, ml, outFn := parseReadmeCommand(readme)
-		cw.jc.Lock()
-		// Check once more in case we're racing to be first Lock()
-		if _, found := cw.jc.cache[dn]; !found {
-			cw.jc.cache[dn] = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
-		}
-		cw.jc.Unlock()
+		cw.jc.cache[dn] = Job{MemoryLimit: ml, Command: cmd, OutFile: outFn}
 	}
-
 	// Fill in just the cached fields
 	j := Job{
 		Command:     cw.jc.cache[dn].Command,
 		OutFile:     cw.jc.cache[dn].OutFile,
 		MemoryLimit: cw.jc.cache[dn].MemoryLimit,
 	}
-	cw.jc.RUnlock()
 	return j
 }
 
