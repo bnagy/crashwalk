@@ -381,7 +381,8 @@ func init() {
 func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (crash.Info, error) {
 
 	var cmd *exec.Cmd
-	args := gdbArgs[:]
+	args := []string{}
+	copy(args, gdbArgs)
 
 	sub := 0
 	for i, elem := range command {
