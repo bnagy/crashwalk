@@ -382,7 +382,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 
 	var cmd *exec.Cmd
 	var t *time.Timer
-	args := []string{}
+	args := make([]string, len(gdbArgs))
 	copy(args, gdbArgs)
 
 	sub := 0
