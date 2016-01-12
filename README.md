@@ -58,6 +58,8 @@ If you are in the directory that contains your individual fuzz workers, then the
 cwtriage -root . -afl
 ```
 
+*NOTE* See [Bugs] below!
+
 ### Manual Mode
 
 If you're triaging from an older version of AFL or you want to run the crashes with a different target command, then `-match crashes.\*id` should match AFL crashes.
@@ -248,7 +250,11 @@ Extra Data:
 
 ## TODO
 
-Add NSQ support. Add docker support.
+Add NSQ support. Add docker support. (j/k)
+
+## Bugs
+
+For `-afl` mode, README.txt files that do not contain a command separator (`--`) are not parsed correctly. The best way to work around this issue is to use a separator if launching `afl-fuzz` manually or to use [afl-launch](https://github.com/bnagy/afl-launch). Resolving this issue would mean emulating C getopt, which I am disinclined to spend time doing - patches welcome!
 
 ## Contributing
 
