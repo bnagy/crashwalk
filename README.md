@@ -58,7 +58,7 @@ If you are in the directory that contains your individual fuzz workers, then the
 cwtriage -root . -afl
 ```
 
-*NOTE* See [Bugs] below!
+**NOTE** See [Bugs](#Bugs) below!
 
 ### Manual Mode
 
