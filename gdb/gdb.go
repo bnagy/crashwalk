@@ -371,10 +371,16 @@ func parse(raw []byte, cmd string) crash.Info {
 func init() {
 
 	//if env. variable is set, bypass default path for exploitable
-	if os.Getenv("EXPLOITABLE") != "" {
-		gdbBatch[1] = "source " + os.Getenv("EXPLOITABLE") + "/exploitable.py"
+	if os.Getenv("CW_EXPLOITABLE") != "" {
+		explPath := os.Getenv("CW_EXPLOITABLE") + "/exploitable.py"
+		_, err := os.Stat(explPath)
+		if os.IsNotExist(err) {
+			fmt.Println("Invalid exploitable path: ", explPath)
+			os.Exit(1)
+		} else {
+			gdbBatch[1] = "source " + explPath
+		}
 	}
-
 	// build the commandline from the components
 	for _, s := range gdbBatch {
 		gdbArgs = append(gdbArgs, []string{"--ex", s}...)
