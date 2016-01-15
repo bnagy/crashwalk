@@ -14,8 +14,11 @@ import (
 	"github.com/bnagy/crashwalk/crash"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,10 +28,14 @@ import (
 // Engine is used to satisy the crashwalk.Debugger interface
 type Engine struct{}
 
+//get current user's homedir for default exploitable path
+var usr, _ = user.Current()
+var explDefaultPath = filepath.Join(usr.HomeDir, "/src/exploitable/exploitable/exploitable.py")
+
 // So classy. :<
 var gdbBatch = []string{
 	"run",
-	"source ~/src/exploitable/exploitable/exploitable.py", // TODO get from env? hardwire?
+	"source " + explDefaultPath, // TODO get from env? hardwire?
 	"echo <EXPLOITABLE>\n",
 	"exploitable -v",
 	"echo </EXPLOITABLE>\n",
@@ -369,16 +376,18 @@ func parse(raw []byte, cmd string) crash.Info {
 }
 
 func init() {
-
 	//if env. variable is set, bypass default path for exploitable
 	if os.Getenv("CW_EXPLOITABLE") != "" {
-		explPath := os.Getenv("CW_EXPLOITABLE") + "/exploitable.py"
+		explPath := filepath.Join(os.Getenv("CW_EXPLOITABLE"), "exploitable.py")
 		_, err := os.Stat(explPath)
+		gdbBatch[1] = "source " + explPath
 		if os.IsNotExist(err) {
-			fmt.Println("Invalid exploitable path: ", explPath)
-			os.Exit(1)
-		} else {
-			gdbBatch[1] = "source " + explPath
+			log.Fatalf("Invalid exploitable path: %s", explPath)
+		}
+	} else {
+		_, err := os.Stat(explDefaultPath)
+		if os.IsNotExist(err) {
+			log.Fatalf("Could not find exploitable in default path: %s", explDefaultPath)
 		}
 	}
 	// build the commandline from the components
