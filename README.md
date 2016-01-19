@@ -105,7 +105,7 @@ pdf-S3/crashes/id:000822,sig:08,src:019017+009441,op:splice,rep:4
 1. You should follow the [instructions](https://golang.org/doc/install) to
 install Go, if you haven't already done so.
 
-2. (FOR LINUX ONLY) Install the 'exploitable' tool from [here](https://github.com/jfoote/exploitable). Right now the code is expecting to find the tool at `~/src/exploitable/exploitable/exploitable.py`. I plan to make this less hacky later, but the current license on the exploitable tool is in disarray, thus it (possibly) prevents me from bundling it with this repo.
+2. (FOR LINUX ONLY) Install the 'exploitable' tool from [here](https://github.com/jfoote/exploitable). Right now the code is expecting to find the tool at `~/src/exploitable/exploitable/exploitable.py`. If this is impossible, you can set the CW_EXPLOITABLE environment variable and it should get picked up.
 
 3. (FOR LINUX ONLY) Make sure you have gdb in your path with `which gdb`
 
