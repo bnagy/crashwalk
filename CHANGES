@@ -49,3 +49,7 @@ November 5, 2015:
 
 - -afl now picks up -m and -f options from README.txt
 - (internal) crashwalk now dispatches job options per job instead of via global config
+
+January 20, 2015:
+
+- the GDB exploitable plugin can now be located using the CW_EXPLOITABLE environment variable (PR #10 zuBux)
