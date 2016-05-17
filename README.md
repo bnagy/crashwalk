@@ -122,7 +122,7 @@ The binaries produced are statically linked (Go just does that), so you can 'dep
 
 No overarching tests yet, sorry, it's a little fiddly to build a standalone testbed. The gdb / lldb parsers will panic if they get confused and give you the problematic input and a useful stack trace. If the input is not sensitive, use that to open an issue and I'll fix it.
 
-`exploitaben` does have a reasonable set of tests, and you can check out [the results](https://github.com/bnagy/francis/exploitaben/test_results/test_output.txt). I suck at python so the diffing is not automatic. I included all of the exploitable project tests as well as all the CrashWrangler tests.
+`exploitaben` does have a reasonable set of tests, and you can check out [the results](https://github.com/bnagy/francis/blob/master/exploitaben/test_results/test_output.txt). I suck at python so the diffing is not automatic. I included all of the exploitable project tests as well as all the CrashWrangler tests.
 
 ## Screenshots
 
