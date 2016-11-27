@@ -33,6 +33,7 @@ var (
 	flagOutput  = flag.String("output", "text", "Output format to use: [json pb text]")
 	flagTidy    = flag.Bool("tidy", false, "Move crashes that error under Run() to a tidy dir")
 	flagFile    = flag.String("f", "", "Template filename to use while running crash")
+	flagSeenDB  = flag.String("seendb", "crashwalk.db", "Path to BoltDB")
 )
 
 func main() {
@@ -181,6 +182,7 @@ func main() {
 		Timeout:     *flagTimeout,
 		Tidy:        *flagTidy,
 		File:        *flagFile,
+		SeenDB:      *flagSeenDB,
 	}
 
 	cw, err := crashwalk.NewCrashwalk(config)
