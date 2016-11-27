@@ -34,6 +34,8 @@ To run the standalone cwtriage tool:
       Root directory to look for crashes
   -seen
       Include seen results from the DB in the output
+  -seendb string
+      Path to BoltDB (default "crashwalk.db")
   -strict
       Abort the whole run if any crashes fail to repro
   -t int
