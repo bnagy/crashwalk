@@ -185,13 +185,13 @@ func mustAdvanceTo(token string, scanner *bufio.Scanner, die func()) {
 func parseExploitable(raw []byte, ci *crash.Info, die func()) {
 
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
-
+	// Edge case: "Faulting frame: #  0 None at 0x40008130 in"
 	// Faulting frame: #  4 None at 0x7ffff6fad93b in /usr/lib/x86_64-linux-gnu/libcairo.so.2.11301.0
 	// Faulting frame: #  6 operator new(unsigned long) at 0x7ffff6d87698 in /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
 	// [  <---ignore--->  ] [  symbol text until "at"  ]     [address]      [ <-- module from here--> ]
 	mustAdvanceTo("Faulting frame:", scanner, die)
 	ff := strings.Fields(scanner.Text())
-	if len(ff) < 9 {
+	if len(ff) < 8 {
 		die()
 	}
 
