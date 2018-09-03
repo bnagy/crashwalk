@@ -311,6 +311,13 @@ func parseStack(raw []byte, die func()) (stack []crash.StackEntry) {
 	// #  3 __GI___assert_fail at 0x7ffff616ad92 in /lib/x86_64-linux-gnu/libc-2.19.so (BL)
 	// [...] HAHAH NO SPACES FOR 3+ DIGITS o_0
 	// #100 Parser::getObj at 0x56997b in /home/ben/src/poppler-0.26.5/utils/pdftocairo
+	
+	// Edge case (line will only have 5 segments)
+	// # 25 None at 0xa in ?
+	// # 26 None at 0x7ffff630f150 in
+
+	// Other edge case:
+	// #100 None at 0x7ffff5dc9970 in
 
 	stack = []crash.StackEntry{}
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
@@ -322,7 +329,7 @@ func parseStack(raw []byte, die func()) (stack []crash.StackEntry) {
 			break
 		}
 		ff := strings.Fields(scanner.Text())
-		if len(ff) < 6 {
+		if len(ff) < 5 {
 			die()
 		}
 		var address uint64
@@ -346,7 +353,7 @@ func parseStack(raw []byte, die func()) (stack []crash.StackEntry) {
 			stack,
 			crash.StackEntry{
 				Address: address,
-				Module:  strings.Join(ff[6:], " "),
+				Module:  strings.Join(ff[(len(ff)-1):], " "),
 				Symbol:  ff[1+adjust],
 			},
 		)
