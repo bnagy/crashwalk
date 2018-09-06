@@ -46,7 +46,6 @@ var gdbBatch = []string{
 }
 var gdbPrefix = []string{"-q", "--batch"}
 var gdbPostfix = []string{"--args"}
-var gdbArgs = gdbPrefix
 
 var subRegex = regexp.MustCompile("@@")
 
@@ -397,11 +396,6 @@ func init() {
 			log.Fatalf("Could not find exploitable in default path: %s", explDefaultPath)
 		}
 	}
-	// build the commandline from the components
-	for _, s := range gdbBatch {
-		gdbArgs = append(gdbArgs, []string{"--ex", s}...)
-	}
-	gdbArgs = append(gdbArgs, gdbPostfix...)
 }
 
 // Run satisfies the crashwalk.Debugger interface. It runs a command under the
@@ -410,8 +404,18 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 
 	var cmd *exec.Cmd
 	var t *time.Timer
-	args := make([]string, len(gdbArgs))
-	copy(args, gdbArgs)
+	args := make([]string, len(gdbPrefix))
+	copy(args, gdbPrefix)
+
+	if memlimit > 0 {
+		wrapper := `set exec-wrapper bash -c 'ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) +` && exec "$0" "$@"'`
+		args = append(args, []string{"--ex", wrapper}...)
+	}
+
+	for _, s := range gdbBatch {
+		args = append(args, []string{"--ex", s}...)
+	}
+	args = append(args, gdbPostfix...)
 
 	sub := 0
 	for i, elem := range command {
@@ -422,26 +426,7 @@ func (e *Engine) Run(command []string, filename string, memlimit, timeout int) (
 	}
 	cmdStr := strings.Join(append(args, command...), " ")
 
-	if memlimit > 0 {
-		// TODO: This works around a Go limitation. There is no clean way to
-		// fork(), setrlimit() and then exec() because forkExec() is combined
-		// into one function in syscall.
-		//
-		// Basically our strategy is to run bash -c "ulimit ... && exec
-		// real_command". After the exec replaces the bash process with the
-		// child, THAT will finally get run by gdb as an inferior, but it
-		// will have its ulimit set correctly.
-		//
-		// $0 - command following bash -c
-		// $@ - all the args to _that_ command
-		bashmagic := `ulimit -Sv ` + fmt.Sprintf("%d", memlimit*1024) + ` && exec "$0" "$@"`
-		// final command will be like:
-		// gdb [gdb args] --args [bash -c ulimit && exec $0 $@] [real command here]
-		args = append(args, []string{"bash", "-c", bashmagic}...)
-		args = append(args, command...)
-	} else {
-		args = append(args, command...)
-	}
+	args = append(args, command...)
 
 	cmd = exec.Command("gdb", args...)
 	stdout, err := cmd.StdoutPipe()
