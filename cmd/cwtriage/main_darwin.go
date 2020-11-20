@@ -119,11 +119,6 @@ func main() {
 	}
 
 	command := flag.Args()
-	if len(command) < 2 && !*flagAfl {
-		fmt.Fprintf(os.Stderr, "  FATAL: Minimum target command is: /path/to/target @@\n")
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	runtime.GOMAXPROCS(*flagWorkers)
 
