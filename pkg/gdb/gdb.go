@@ -11,7 +11,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/bnagy/crashwalk/crash"
+	"crashwalk/pkg/crash"
 	"io"
 	"io/ioutil"
 	"log"
