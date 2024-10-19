@@ -11,7 +11,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/bnagy/crashwalk/crash"
+	"crashwalk/pkg/crash"
 	"github.com/boltdb/bolt"
 	"github.com/gogo/protobuf/proto"
 	"io"

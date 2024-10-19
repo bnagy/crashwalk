@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/bnagy/crashwalk/crash"
+	"crashwalk/pkg/crash"
 	"github.com/boltdb/bolt"
 	"github.com/gogo/protobuf/proto"
 	"log"
